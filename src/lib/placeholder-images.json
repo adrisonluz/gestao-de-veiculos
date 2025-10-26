@@ -1,0 +1,28 @@
+{
+  "placeholderImages": [
+    {
+      "id": "vehicle-1",
+      "description": "A modern white sedan parked.",
+      "imageUrl": "https://picsum.photos/seed/vehicle1/600/400",
+      "imageHint": "white car"
+    },
+    {
+      "id": "vehicle-2",
+      "description": "A red sports car on a winding road.",
+      "imageUrl": "https://picsum.photos/seed/vehicle2/600/400",
+      "imageHint": "red car"
+    },
+    {
+      "id": "vehicle-3",
+      "description": "A black SUV in a city setting.",
+      "imageUrl": "https://picsum.photos/seed/vehicle3/600/400",
+      "imageHint": "black suv"
+    },
+    {
+      "id": "vehicle-4",
+      "description": "A blue pickup truck in a rural area.",
+      "imageUrl": "https://picsum.photos/seed/vehicle4/600/400",
+      "imageHint": "blue truck"
+    }
+  ]
+}
