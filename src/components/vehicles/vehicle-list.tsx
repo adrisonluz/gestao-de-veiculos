@@ -18,17 +18,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal } from 'lucide-react';
 import type { Vehicle } from '@/lib/definitions';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
+import logo from '@/assets/images/logo.png';
 
 type VehicleListProps = {
   vehicles: Vehicle[];
 };
 
 export function VehicleList({ vehicles }: VehicleListProps) {
-  const getImage = (imageId: string) => {
-    return PlaceHolderImages.find(p => p.id === imageId);
-  }
-
   return (
     <Table>
       <TableHeader>
@@ -43,21 +39,16 @@ export function VehicleList({ vehicles }: VehicleListProps) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {vehicles.map((vehicle) => {
-          const image = getImage(vehicle.images[0]);
-          return (
+        {vehicles.map((vehicle) => (
             <TableRow key={vehicle.id}>
               <TableCell>
-                {image && (
-                  <Image
-                    src={image.imageUrl}
+                <Image
+                    src={vehicle.imageUrl || logo}
                     alt={vehicle.model}
                     width={64}
                     height={48}
                     className="rounded-md object-cover"
-                    data-ai-hint={image.imageHint}
-                  />
-                )}
+                />
               </TableCell>
               <TableCell className="font-medium">{vehicle.plate}</TableCell>
               <TableCell>{vehicle.model}</TableCell>
@@ -79,8 +70,7 @@ export function VehicleList({ vehicles }: VehicleListProps) {
                 </DropdownMenu>
               </TableCell>
             </TableRow>
-          );
-        })}
+          ))}
       </TableBody>
     </Table>
   );

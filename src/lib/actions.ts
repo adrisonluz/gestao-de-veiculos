@@ -3,7 +3,7 @@
 
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
-import { addDoc, collection } from 'firebase/firestore';
+import { addDoc, collection, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from './firebase';
 
 const FormSchema = z.object({
@@ -15,6 +15,14 @@ const FormSchema = z.object({
 });
 
 const CreateClient = FormSchema;
+const VehicleSchema = z.object({
+    plate: z.string(),
+    model: z.string(),
+    brand: z.string(),
+    year: z.string(),
+    color: z.string(),
+    imageUrl: z.string().url().optional(),
+  });
 
 export async function createClient(data: z.infer<typeof CreateClient>) {
   const { name, email, phone, billingType, cpf } = CreateClient.parse(data);
@@ -35,3 +43,25 @@ export async function createClient(data: z.infer<typeof CreateClient>) {
     throw error;
   }
 }
+
+export async function createVehicle(clientId: string, data: z.infer<typeof VehicleSchema>) {
+    const { plate, model, brand, year, color, imageUrl } = VehicleSchema.parse(data);
+    const clientRef = doc(db, 'clients', clientId);
+  
+    try {
+      await updateDoc(clientRef, {
+        vehicles: arrayUnion({
+          plate,
+          model,
+          brand,
+          year,
+          color,
+          imageUrl,
+        }),
+      });
+      revalidatePath(`/clients/${clientId}`);
+    } catch (error) {
+      console.error('Error creating vehicle:', error);
+      throw error;
+    }
+  }
