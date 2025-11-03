@@ -21,7 +21,7 @@ const formSchema = z.object({
   brand: z.string().min(2, 'A marca deve ter pelo menos 2 caracteres.'),
   year: z.string().min(4, 'O ano deve ter 4 caracteres.'),
   color: z.string().min(3, 'A cor deve ter pelo menos 3 caracteres.'),
-  imageUrl: z.string().url().optional(),
+  value: z.coerce.number().min(0, 'O valor deve ser um número positivo.'),
 });
 
 export function CreateVehicleForm({ clientId, onSuccess }: { clientId: string, onSuccess: () => void }) {
@@ -33,7 +33,7 @@ export function CreateVehicleForm({ clientId, onSuccess }: { clientId: string, o
         brand: '',
         year: '',
         color: '',
-        imageUrl: '',
+        value: 0,
     },
   });
 
@@ -89,44 +89,46 @@ export function CreateVehicleForm({ clientId, onSuccess }: { clientId: string, o
             </FormItem>
           )}
         />
+        <div className="flex w-full space-x-4">
+            <FormField
+            control={form.control}
+            name="year"
+            render={({ field }) => (
+                <FormItem className="w-full">
+                <FormLabel>Ano</FormLabel>
+                <FormControl>
+                    <Input placeholder="2023" {...field} />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+            <FormField
+            control={form.control}
+            name="color"
+            render={({ field }) => (
+                <FormItem className="w-full">
+                <FormLabel>Cor</FormLabel>
+                <FormControl>
+                    <Input placeholder="Preto" {...field} />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
+            />
+        </div>
         <FormField
-          control={form.control}
-          name="year"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Ano</FormLabel>
-              <FormControl>
-                <Input placeholder="2023" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="color"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Cor</FormLabel>
-              <FormControl>
-                <Input placeholder="Preto" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="imageUrl"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>URL da Imagem</FormLabel>
-              <FormControl>
-                <Input placeholder="https://example.com/imagem.png" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+            control={form.control}
+            name="value"
+            render={({ field }) => (
+                <FormItem>
+                <FormLabel>Valor</FormLabel>
+                <FormControl>
+                    <Input type="number" placeholder="50000" {...field} />
+                </FormControl>
+                <FormMessage />
+                </FormItem>
+            )}
         />
         <Button type="submit" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting ? 'Salvando...' : 'Salvar Veículo'}

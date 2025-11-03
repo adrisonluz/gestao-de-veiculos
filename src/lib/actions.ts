@@ -21,7 +21,7 @@ const VehicleSchema = z.object({
     brand: z.string(),
     year: z.string(),
     color: z.string(),
-    imageUrl: z.string().url().optional(),
+    value: z.number(),
   });
 
 export async function createClient(data: z.infer<typeof CreateClient>) {
@@ -45,7 +45,7 @@ export async function createClient(data: z.infer<typeof CreateClient>) {
 }
 
 export async function createVehicle(clientId: string, data: z.infer<typeof VehicleSchema>) {
-    const { plate, model, brand, year, color, imageUrl } = VehicleSchema.parse(data);
+    const { plate, model, brand, year, color, value } = VehicleSchema.parse(data);
     const clientRef = doc(db, 'clients', clientId);
   
     try {
@@ -56,7 +56,7 @@ export async function createVehicle(clientId: string, data: z.infer<typeof Vehic
           brand,
           year,
           color,
-          imageUrl,
+          value,
         }),
       });
       revalidatePath(`/clients/${clientId}`);

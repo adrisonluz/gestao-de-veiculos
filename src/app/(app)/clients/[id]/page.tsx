@@ -12,6 +12,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { CreateVehicleModal } from '@/components/vehicles/create-vehicle-modal';
 import { VehicleList } from '@/components/vehicles/vehicle-list';
+import { CreateBillingModal } from '@/components/billing/create-billing-modal';
 
 export default async function ClientDetailPage({ params }: { params: { id: string } }) {
   const client = await fetchClientById(params.id);
@@ -56,7 +57,10 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
                   Veículos registrados para {client.name}.
                 </CardDescription>
               </div>
-              <CreateVehicleModal clientId={client.id} />
+              <div className="flex gap-2">
+                <CreateBillingModal client={client} />
+                <CreateVehicleModal clientId={client.id} />
+              </div>
             </CardHeader>
             <CardContent>
               <VehicleList vehicles={client.vehicles} />

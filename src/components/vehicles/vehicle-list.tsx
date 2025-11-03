@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import {
   Table,
   TableBody,
@@ -18,7 +17,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal } from 'lucide-react';
 import type { Vehicle } from '@/lib/definitions';
-import logo from '@/assets/images/logo.png';
 
 type VehicleListProps = {
   vehicles: Vehicle[];
@@ -29,7 +27,6 @@ export function VehicleList({ vehicles }: VehicleListProps) {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Imagem</TableHead>
           <TableHead>Placa</TableHead>
           <TableHead>Modelo</TableHead>
           <TableHead className="text-right">Valor</TableHead>
@@ -41,15 +38,6 @@ export function VehicleList({ vehicles }: VehicleListProps) {
       <TableBody>
         {vehicles.map((vehicle) => (
             <TableRow key={vehicle.id}>
-              <TableCell>
-                <Image
-                    src={vehicle.imageUrl || logo}
-                    alt={vehicle.model}
-                    width={64}
-                    height={48}
-                    className="rounded-md object-cover"
-                />
-              </TableCell>
               <TableCell className="font-medium">{vehicle.plate}</TableCell>
               <TableCell>{vehicle.model}</TableCell>
               <TableCell className="text-right">
