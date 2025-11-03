@@ -6,40 +6,49 @@ import type { Client, FinancialRecord } from './definitions';
 export async function fetchClients(): Promise<Client[]> {
   const clientsCol = collection(db, 'clients');
   const clientSnapshot = await getDocs(clientsCol);
-  const clientList = clientSnapshot.docs.map(doc => {
-    const data = doc.data();
+  const clientList = await Promise.all(clientSnapshot.docs.map(async (clientDoc) => {
+    const clientData = clientDoc.data();
+    const vehiclesCol = collection(clientDoc.ref, 'vehicles');
+    const vehicleSnapshot = await getDocs(vehiclesCol);
+    const vehicles = vehicleSnapshot.docs.map(vehicleDoc => vehicleDoc.data());
+
     return {
-      id: doc.id,
-      name: data.name,
-      email: data.email,
-      address: data.address,
-      cpf: data.cpf,
-      billingType: data.billingType,
-      vehicles: data.vehicles || [],
+      id: clientDoc.id,
+      name: clientData.name,
+      email: clientData.email,
+      address: clientData.address,
+      cpf: clientData.cpf,
+      billingType: clientData.billingType,
+      vehicles: vehicles || [],
     } as Client;
-  });
+  }));
+
   return clientList;
 }
 
 export async function fetchClientById(id: string): Promise<Client | null> {
-  const docRef = doc(db, 'clients', id);
-  const docSnap = await getDoc(docRef);
-
-  if (docSnap.exists()) {
-    const data = docSnap.data();
-    return {
-      id: docSnap.id,
-      name: data.name,
-      email: data.email,
-      address: data.address,
-      cpf: data.cpf,
-      billingType: data.billingType,
-      vehicles: data.vehicles || [],
-    } as Client;
-  } else {
-    return null;
+    const docRef = doc(db, 'clients', id);
+    const docSnap = await getDoc(docRef);
+  
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      const vehiclesCol = collection(docRef, 'vehicles');
+      const vehicleSnapshot = await getDocs(vehiclesCol);
+      const vehicles = vehicleSnapshot.docs.map(vehicleDoc => vehicleDoc.data());
+  
+      return {
+        id: docSnap.id,
+        name: data.name,
+        email: data.email,
+        address: data.address,
+        cpf: data.cpf,
+        billingType: data.billingType,
+        vehicles: vehicles || [],
+      } as Client;
+    } else {
+      return null;
+    }
   }
-}
 
 export async function getFinancialRecords(): Promise<FinancialRecord[]> {
   const recordsCol = collection(db, 'financialRecords');
