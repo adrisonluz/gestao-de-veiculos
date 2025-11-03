@@ -30,14 +30,31 @@ export function DashboardClient({ clients, financialRecords }: DashboardClientPr
   const totalVehicles = clients.reduce((acc, client) => acc + client.vehicles.length, 0);
   const totalRevenue = financialRecords.reduce((acc, record) => acc + (record.amount > 0 ? record.amount : 0), 0);
 
-  const chartData = [
-    { name: 'Out', revenue: 4000 },
-    { name: 'Nov', revenue: 3000 },
-    { name: 'Dez', revenue: 5000 },
-    { name: 'Jan', revenue: 4500 },
-    { name: 'Fev', revenue: 6000 },
-    { name: 'Mar', revenue: 5800 },
-  ];
+  const processChartData = (records: FinancialRecord[]) => {
+    const monthlyRevenue: { [key: string]: number } = {};
+
+    records.forEach((record) => {
+      const date = new Date(record.date);
+      const month = date.toLocaleString('pt-BR', { month: 'short' });
+
+      if (record.amount > 0) {
+        if (monthlyRevenue[month]) {
+          monthlyRevenue[month] += record.amount;
+        } else {
+          monthlyRevenue[month] = record.amount;
+        }
+      }
+    });
+
+    const chartData = Object.keys(monthlyRevenue).map((month) => ({
+      name: month,
+      revenue: monthlyRevenue[month],
+    }));
+
+    return chartData;
+  };
+
+  const chartData = processChartData(financialRecords);
 
   return (
     <>
