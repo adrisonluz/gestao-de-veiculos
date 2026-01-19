@@ -30,6 +30,12 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  experimental: {
+    optimizePackageImports: ['@radix-ui/*', 'lucide-react'],
+    serverComponentsExternalPackages: ['firebase'],
+  },
+  output: 'standalone',
+  swcMinify: true,
 };
 
 export default nextConfig;
