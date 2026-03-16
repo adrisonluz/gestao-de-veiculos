@@ -20,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { auth } from "@/lib/firebase";
+import { normalizeEmail } from "@/lib/input-masks";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Por favor, insira um e-mail válido." }),
@@ -69,7 +70,14 @@ export function LoginForm() {
             <FormItem>
               <FormLabel>E-mail</FormLabel>
               <FormControl>
-                <Input placeholder="nome@exemplo.com" {...field} />
+                <Input
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  placeholder="nome@exemplo.com"
+                  {...field}
+                  onChange={(event) => field.onChange(normalizeEmail(event.target.value))}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

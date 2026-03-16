@@ -13,6 +13,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { CurrencyInputComponent } from '@/components/ui/currency-input';
 import { createVehicle } from '@/lib/actions';
 
 const formSchema = z.object({
@@ -124,7 +125,14 @@ export function CreateVehicleForm({ clientId, onSuccess }: { clientId: string, o
                 <FormItem>
                 <FormLabel>Valor</FormLabel>
                 <FormControl>
-                    <Input type="number" placeholder="50000" {...field} />
+                    <CurrencyInputComponent
+                      value={field.value ?? 0}
+                      placeholder="R$ 0,00"
+                      onValueChange={(maskedValue) => {
+                        const parsed = maskedValue ? Number(maskedValue) : 0;
+                        field.onChange(Number.isNaN(parsed) ? 0 : parsed);
+                      }}
+                    />
                 </FormControl>
                 <FormMessage />
                 </FormItem>

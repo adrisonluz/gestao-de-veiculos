@@ -45,6 +45,10 @@ export default function ClientsPage() {
     setIsModalOpen(false);
   };
 
+  const handleClientDeleted = (clientId: string) => {
+    setClients((prevClients) => prevClients.filter((client) => client.id !== clientId));
+  };
+
   return (
     <>
       <PageHeader title="Clientes">
@@ -71,7 +75,7 @@ export default function ClientsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ClientList clients={clients} />
+          <ClientList clients={clients} onClientDeleted={handleClientDeleted} />
         </CardContent>
       </Card>
     </>

@@ -19,16 +19,33 @@ import {
 import { MoreHorizontal } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import type { Client } from '@/lib/definitions';
+import { deleteClient } from '@/lib/actions';
 
 type ClientListProps = {
   clients: Client[];
+  onClientDeleted?: (clientId: string) => void;
 };
 
-export function ClientList({ clients }: ClientListProps) {
+export function ClientList({ clients, onClientDeleted }: ClientListProps) {
   const router = useRouter();
 
   const handleViewDetails = (clientId: string) => {
     router.push(`/clients/${clientId}`);
+  };
+
+  const handleDeleteClient = async (clientId: string) => {
+    const confirmed = window.confirm('Tem certeza que deseja excluir este cliente?');
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteClient(clientId);
+      onClientDeleted?.(clientId);
+    } catch (error) {
+      console.error(error);
+      window.alert('Não foi possível excluir o cliente. Tente novamente.');
+    }
   };
   
   return (
@@ -58,7 +75,7 @@ export function ClientList({ clients }: ClientListProps) {
             <TableCell className="text-right">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="h-8 w-8 p-0">
+                  <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
                     <span className="sr-only">Abrir menu</span>
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
@@ -68,7 +85,13 @@ export function ClientList({ clients }: ClientListProps) {
                     Ver detalhes
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={(e) => e.stopPropagation()}>Editar</DropdownMenuItem>
-                  <DropdownMenuItem className="text-destructive" onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleDeleteClient(client.id);
+                    }}
+                  >
                     Excluir
                   </DropdownMenuItem>
                 </DropdownMenuContent>

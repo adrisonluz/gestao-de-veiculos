@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { createClient } from '@/lib/actions';
+import { applyPhoneMask, normalizeEmail } from '@/lib/input-masks';
 
 const formSchema = z.object({
   name: z.string().min(2, 'O nome deve ter pelo menos 2 caracteres.'),
@@ -76,7 +77,14 @@ export function CreateClientForm({ onSuccess }: { onSuccess: () => void }) {
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input placeholder="email@example.com" {...field} />
+                <Input
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  placeholder="email@example.com"
+                  {...field}
+                  onChange={(event) => field.onChange(normalizeEmail(event.target.value))}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -89,7 +97,15 @@ export function CreateClientForm({ onSuccess }: { onSuccess: () => void }) {
             <FormItem>
               <FormLabel>Telefone</FormLabel>
               <FormControl>
-                <Input placeholder="(99) 99999-9999" {...field} />
+                <Input
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel-national"
+                  maxLength={15}
+                  placeholder="(99) 99999-9999"
+                  {...field}
+                  onChange={(event) => field.onChange(applyPhoneMask(event.target.value))}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

@@ -41,9 +41,11 @@ export default async function ReportsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-            <Input type="date" placeholder="Data Inicial" />
-            <Input type="date" placeholder="Data Final" />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
+            <Input type="date" aria-label="Data Inicial" />
+            <Input type="date" aria-label="Data Final" />
+            <Input type="time" step="60" aria-label="Hora Inicial" />
+            <Input type="time" step="60" aria-label="Hora Final" />
             <Select>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione o Cliente" />

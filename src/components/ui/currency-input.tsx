@@ -1,22 +1,58 @@
 'use client';
 
-import CurrencyInput, { CurrencyInputProps } from 'react-currency-input-field';
+import * as React from 'react';
 import { Input } from '@/components/ui/input';
 
-export function CurrencyInputComponent({ ...props }: CurrencyInputProps) {
+type CurrencyInputComponentProps = Omit<
+  React.ComponentProps<typeof Input>,
+  'value' | 'onChange' | 'type'
+> & {
+  value?: number | string;
+  onValueChange?: (value: string | undefined) => void;
+};
+
+function formatCurrencyValue(value: number): string {
+  return value.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+}
+
+function normalizeCurrencyValue(value: number | string | undefined): string {
+  if (value === undefined || value === null || value === '') {
+    return '';
+  }
+
+  const numericValue = typeof value === 'number' ? value : Number(value);
+  if (Number.isNaN(numericValue)) {
+    return '';
+  }
+
+  return formatCurrencyValue(numericValue);
+}
+
+export function CurrencyInputComponent({ value, onValueChange, ...props }: CurrencyInputComponentProps) {
+  const displayValue = React.useMemo(() => normalizeCurrencyValue(value), [value]);
+
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = event.target.value.replace(/\D/g, '');
+
+    if (!digits) {
+      onValueChange?.(undefined);
+      return;
+    }
+
+    const normalized = (Number(digits) / 100).toFixed(2);
+    onValueChange?.(normalized);
+  };
+
   return (
-    <CurrencyInput
+    <Input
       {...props}
-      render={(renderProps) => <Input {...renderProps} />}
-      prefix="R$ "
-      decimalSeparator=","
-      groupSeparator="."
-      decimalsLimit={2}
-      onValueChange={(value, name, values) => {
-        if (props.onValueChange) {
-            props.onValueChange(value, name, values);
-        }
-      }}
+      type="text"
+      inputMode="decimal"
+      value={displayValue}
+      onChange={handleChange}
     />
   );
 }

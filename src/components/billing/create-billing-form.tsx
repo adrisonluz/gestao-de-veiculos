@@ -13,6 +13,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { CurrencyInputComponent } from '@/components/ui/currency-input';
 import {
     Select,
     SelectContent,
@@ -20,6 +21,7 @@ import {
     SelectTrigger,
     SelectValue,
   } from '@/components/ui/select';
+import { formatDateForInput } from '@/lib/input-masks';
 
 const formSchema = z.object({
   dueDate: z.string(),
@@ -35,7 +37,7 @@ export function CreateBillingForm({ client, onSuccess }: { client: any, onSucces
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-        dueDate: nextMonth.toISOString().split('T')[0],
+      dueDate: formatDateForInput(nextMonth),
         value: client.vehicles.reduce((acc: any, vehicle: any) => acc + vehicle.value, 0),
         status: 'Em aberto',
     },
@@ -74,7 +76,14 @@ export function CreateBillingForm({ client, onSuccess }: { client: any, onSucces
             <FormItem>
               <FormLabel>Valor</FormLabel>
               <FormControl>
-                <Input type="number" {...field} />
+                <CurrencyInputComponent
+                  value={field.value ?? 0}
+                  placeholder="R$ 0,00"
+                  onValueChange={(maskedValue) => {
+                    const parsed = maskedValue ? Number(maskedValue) : 0;
+                    field.onChange(Number.isNaN(parsed) ? 0 : parsed);
+                  }}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
