@@ -28,27 +28,65 @@ type DashboardClientProps = {
 export function DashboardClient({ clients, financialRecords }: DashboardClientProps) {
   const totalClients = clients.length;
   const totalVehicles = clients.reduce((acc, client) => acc + client.vehicles.length, 0);
-  const totalRevenue = financialRecords.reduce((acc, record) => acc + (record.amount > 0 ? record.amount : 0), 0);
+
+  const totalPago = financialRecords
+    .filter((r) => r.status === 'Pago')
+    .reduce((acc, r) => acc + r.amount, 0);
+  const totalPendente = financialRecords
+    .filter((r) => r.status === 'Em aberto' || r.status === 'Vencido')
+    .reduce((acc, r) => acc + r.amount, 0);
+  const totalRevenue = totalPago - totalPendente;
 
   const processChartData = (records: FinancialRecord[]) => {
-    const monthlyRevenue: { [key: string]: number } = {};
+    const monthlyRevenue: {
+      [key: string]: {
+        paid: number;
+        open: number;
+        overdue: number;
+        canceled: number;
+      };
+    } = {};
 
     records.forEach((record) => {
       const date = new Date(record.date);
       const month = date.toLocaleString('pt-BR', { month: 'short' });
 
-      if (record.amount > 0) {
-        if (monthlyRevenue[month]) {
-          monthlyRevenue[month] += record.amount;
-        } else {
-          monthlyRevenue[month] = record.amount;
-        }
+      if (!monthlyRevenue[month]) {
+        monthlyRevenue[month] = {
+          paid: 0,
+          open: 0,
+          overdue: 0,
+          canceled: 0,
+        };
+      }
+
+      if (record.amount <= 0) {
+        return;
+      }
+
+      switch (record.status) {
+        case 'Pago':
+          monthlyRevenue[month].paid += record.amount;
+          break;
+        case 'Vencido':
+          monthlyRevenue[month].overdue += record.amount;
+          break;
+        case 'Cancelado':
+          monthlyRevenue[month].canceled += record.amount;
+          break;
+        case 'Em aberto':
+        default:
+          monthlyRevenue[month].open += record.amount;
+          break;
       }
     });
 
     const chartData = Object.keys(monthlyRevenue).map((month) => ({
       name: month,
-      revenue: monthlyRevenue[month],
+      Pago: monthlyRevenue[month].paid,
+      'Em aberto': monthlyRevenue[month].open,
+      Vencido: monthlyRevenue[month].overdue,
+      Cancelado: monthlyRevenue[month].canceled,
     }));
 
     return chartData;
@@ -65,10 +103,12 @@ export function DashboardClient({ clients, financialRecords }: DashboardClientPr
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className={`text-2xl font-bold ${totalRevenue < 0 ? 'text-red-500' : ''}`}>
               {totalRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
             </div>
-            <p className="text-xs text-muted-foreground">+20.1% do último mês</p>
+            <p className="text-xs text-muted-foreground">
+              Pago: {totalPago.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} &minus; Pendente: {totalPendente.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -108,12 +148,34 @@ export function DashboardClient({ clients, financialRecords }: DashboardClientPr
                 />
                 <YAxis
                   style={{ fontSize: '12px' }}
+                  tickFormatter={(value: number) =>
+                    value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                  }
                 />
-                <Tooltip />
+                <Tooltip
+                  formatter={(value: number) =>
+                    value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                  }
+                />
                 <Legend />
                 <Bar
-                  dataKey="revenue"
-                  fill="hsl(var(--primary))"
+                  dataKey="Pago"
+                  fill="#22c55e"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="Em aberto"
+                  fill="#3b82f6"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="Vencido"
+                  fill="#f59e0b"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="Cancelado"
+                  fill="#ef4444"
                   radius={[4, 4, 0, 0]}
                 />
               </BarChart>

@@ -18,15 +18,17 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import type { Client } from '@/lib/definitions';
+import type { Client, UserRole } from '@/lib/definitions';
 import { deleteClient } from '@/lib/actions';
 
 type ClientListProps = {
   clients: Client[];
+  companyId: string;
+  actorRole: UserRole;
   onClientDeleted?: (clientId: string) => void;
 };
 
-export function ClientList({ clients, onClientDeleted }: ClientListProps) {
+export function ClientList({ clients, companyId, actorRole, onClientDeleted }: ClientListProps) {
   const router = useRouter();
 
   const handleViewDetails = (clientId: string) => {
@@ -40,7 +42,7 @@ export function ClientList({ clients, onClientDeleted }: ClientListProps) {
     }
 
     try {
-      await deleteClient(clientId);
+      await deleteClient(companyId, actorRole, clientId);
       onClientDeleted?.(clientId);
     } catch (error) {
       console.error(error);

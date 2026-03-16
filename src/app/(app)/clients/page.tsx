@@ -23,25 +23,40 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { CreateClientForm } from '@/components/clients/create-client-form';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const { activeCompanyId, activeRole, hasPermission } = useAuth();
 
   useEffect(() => {
+    if (!activeCompanyId) {
+      setClients([]);
+      return;
+    }
+
+    const companyId: string = activeCompanyId;
+
     async function loadClients() {
-      const fetchedClients = await fetchClients();
+      const fetchedClients = await fetchClients(companyId);
       setClients(fetchedClients);
     }
-    loadClients();
-  }, []);
+    void loadClients();
+  }, [activeCompanyId]);
 
   const handleClientCreated = () => {
+    if (!activeCompanyId) {
+      return;
+    }
+
+    const companyId: string = activeCompanyId;
+
     async function loadClients() {
-      const fetchedClients = await fetchClients();
+      const fetchedClients = await fetchClients(companyId);
       setClients(fetchedClients);
     }
-    loadClients();
+    void loadClients();
     setIsModalOpen(false);
   };
 
@@ -54,7 +69,7 @@ export default function ClientsPage() {
       <PageHeader title="Clientes">
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button disabled={!hasPermission('clients', 'create') || !activeCompanyId || !activeRole}>
               <PlusCircle className="mr-2 h-4 w-4" />
               Adicionar Cliente
             </Button>
@@ -63,7 +78,13 @@ export default function ClientsPage() {
             <DialogHeader>
               <DialogTitle>Novo Cliente</DialogTitle>
             </DialogHeader>
-            <CreateClientForm onSuccess={handleClientCreated} />
+            {activeCompanyId && activeRole ? (
+              <CreateClientForm
+                onSuccess={handleClientCreated}
+                companyId={activeCompanyId}
+                actorRole={activeRole}
+              />
+            ) : null}
           </DialogContent>
         </Dialog>
       </PageHeader>
@@ -75,7 +96,16 @@ export default function ClientsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ClientList clients={clients} onClientDeleted={handleClientDeleted} />
+          {activeCompanyId && activeRole ? (
+            <ClientList
+              clients={clients}
+              companyId={activeCompanyId}
+              actorRole={activeRole}
+              onClientDeleted={handleClientDeleted}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">Nenhuma empresa ativa configurada para este usuário.</p>
+          )}
         </CardContent>
       </Card>
     </>

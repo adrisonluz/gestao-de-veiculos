@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/select';
 import { createClient } from '@/lib/actions';
 import { applyPhoneMask, normalizeEmail } from '@/lib/input-masks';
+import type { UserRole } from '@/lib/definitions';
 
 const formSchema = z.object({
   name: z.string().min(2, 'O nome deve ter pelo menos 2 caracteres.'),
@@ -32,7 +33,15 @@ const formSchema = z.object({
   billingType: z.enum(['manual', 'automatic']).default('manual'),
 });
 
-export function CreateClientForm({ onSuccess }: { onSuccess: () => void }) {
+export function CreateClientForm({
+  onSuccess,
+  companyId,
+  actorRole,
+}: {
+  onSuccess: () => void;
+  companyId: string;
+  actorRole: UserRole;
+}) {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -46,7 +55,7 @@ export function CreateClientForm({ onSuccess }: { onSuccess: () => void }) {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      await createClient(values);
+      await createClient(companyId, actorRole, values);
       onSuccess();
     } catch (error) {
       // TODO: Handle error with a toast notification

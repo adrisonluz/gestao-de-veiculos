@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { CurrencyInputComponent } from '@/components/ui/currency-input';
 import { createVehicle } from '@/lib/actions';
+import type { UserRole } from '@/lib/definitions';
 
 const formSchema = z.object({
   plate: z.string().min(7, 'A placa deve ter 7 caracteres.'),
@@ -25,7 +26,17 @@ const formSchema = z.object({
   value: z.coerce.number().min(0, 'O valor deve ser um número positivo.'),
 });
 
-export function CreateVehicleForm({ clientId, onSuccess }: { clientId: string, onSuccess: () => void }) {
+export function CreateVehicleForm({
+  clientId,
+  companyId,
+  actorRole,
+  onSuccess,
+}: {
+  clientId: string;
+  companyId: string;
+  actorRole: UserRole;
+  onSuccess: () => void;
+}) {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -40,7 +51,7 @@ export function CreateVehicleForm({ clientId, onSuccess }: { clientId: string, o
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      await createVehicle(clientId, values);
+      await createVehicle(companyId, actorRole, clientId, values);
       onSuccess();
     } catch (error) {
       // TODO: Handle error with a toast notification

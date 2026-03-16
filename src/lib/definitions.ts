@@ -1,6 +1,29 @@
 
+export type UserRole = 'owner' | 'admin' | 'manager' | 'financial' | 'viewer';
+
+export type Company = {
+  id: string;
+  name: string;
+  slug: string;
+  active: boolean;
+};
+
+export type CompanyMembership = {
+  id: string;
+  userId: string;
+  companyId: string;
+  role: UserRole;
+  status: 'active' | 'invited' | 'disabled';
+};
+
+export type UserProfile = {
+  id: string;
+  activeCompanyId: string;
+};
+
 export type Client = {
   id: string;
+  companyId: string;
   name: string;
   email: string;
   phone?: string;
@@ -20,8 +43,10 @@ export type Vehicle = {
 
 export type FinancialRecord = {
   id: string;
+  companyId: string;
   date: Date;
   description: string;
   amount: number;
   clientId: string;
+  status?: 'Em aberto' | 'Vencido' | 'Pago' | 'Cancelado' | 'Sem status';
 };

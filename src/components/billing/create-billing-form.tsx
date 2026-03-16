@@ -22,14 +22,27 @@ import {
     SelectValue,
   } from '@/components/ui/select';
 import { formatDateForInput } from '@/lib/input-masks';
+import { createBilling } from '@/lib/actions';
+import type { UserRole } from '@/lib/definitions';
 
 const formSchema = z.object({
+  vehicleId: z.string().optional(),
   dueDate: z.string(),
   value: z.coerce.number(),
   status: z.enum(['Em aberto', 'Vencido', 'Pago', 'Cancelado']),
 });
 
-export function CreateBillingForm({ client, onSuccess }: { client: any, onSuccess: () => void }) {
+export function CreateBillingForm({
+  companyId,
+  actorRole,
+  client,
+  onSuccess,
+}: {
+  companyId: string;
+  actorRole: UserRole;
+  client: any;
+  onSuccess: () => Promise<void> | void;
+}) {
     const nextMonth = new Date();
     nextMonth.setMonth(nextMonth.getMonth() + 1);
     nextMonth.setDate(10);
@@ -37,16 +50,17 @@ export function CreateBillingForm({ client, onSuccess }: { client: any, onSucces
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      vehicleId: undefined,
       dueDate: formatDateForInput(nextMonth),
-        value: client.vehicles.reduce((acc: any, vehicle: any) => acc + vehicle.value, 0),
-        status: 'Em aberto',
+      value: 0,
+      status: 'Em aberto',
     },
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      console.log(values)
-      onSuccess();
+      await createBilling(companyId, actorRole, client.id, values);
+      await onSuccess();
     } catch (error) {
       // TODO: Handle error with a toast notification
       console.error(error);
@@ -56,6 +70,41 @@ export function CreateBillingForm({ client, onSuccess }: { client: any, onSucces
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        {client.vehicles?.length > 0 && (
+          <FormField
+            control={form.control}
+            name="vehicleId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Veículo</FormLabel>
+                <Select
+                  onValueChange={(vehicleId) => {
+                    field.onChange(vehicleId);
+                    const vehicle = client.vehicles.find((v: any) => v.id === vehicleId);
+                    if (vehicle) {
+                      form.setValue('value', vehicle.value);
+                    }
+                  }}
+                  value={field.value}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o veículo" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {client.vehicles.map((vehicle: any) => (
+                      <SelectItem key={vehicle.id} value={vehicle.id}>
+                        {vehicle.plate} — {vehicle.model}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
         <FormField
           control={form.control}
           name="dueDate"
