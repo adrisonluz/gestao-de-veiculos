@@ -19,7 +19,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { can } from './rbac';
-import type { UserRole } from './definitions';
+import type { PermissionSet, UserRole } from './definitions';
 
 const FormSchema = z.object({
   name: z.string(),
@@ -200,6 +200,177 @@ export async function updateBillingStatus(
 
   revalidatePath('/reports');
   revalidatePath('/dashboard');
+}
+
+const AclProfileSchema = z.object({
+  name: z.string().min(2).max(60),
+  description: z.string().max(200).optional(),
+  permissions: z.record(z.string(), z.record(z.string(), z.boolean())),
+});
+
+export async function createAclProfile(
+  companyId: string,
+  actorRole: UserRole,
+  data: { name: string; description?: string; permissions: PermissionSet }
+) {
+  if (!can(actorRole, 'acl', 'create')) {
+    throw new Error('Permissão insuficiente para criar perfis de acesso.');
+  }
+
+  const parsed = AclProfileSchema.parse(data);
+
+  await addDoc(collection(db, 'acl_profiles'), {
+    companyId,
+    name: parsed.name.trim(),
+    description: parsed.description?.trim() ?? '',
+    permissions: parsed.permissions,
+    isSystem: false,
+    createdAt: serverTimestamp(),
+    createdBy: '',
+  });
+
+  revalidatePath('/settings/acl');
+}
+
+export async function updateAclProfile(
+  companyId: string,
+  actorRole: UserRole,
+  profileId: string,
+  data: { name: string; description?: string; permissions: PermissionSet }
+) {
+  if (!can(actorRole, 'acl', 'update')) {
+    throw new Error('Permissão insuficiente para editar perfis de acesso.');
+  }
+
+  const profileRef = doc(db, 'acl_profiles', profileId);
+  const profileSnap = await getDoc(profileRef);
+
+  if (!profileSnap.exists() || profileSnap.data().companyId !== companyId) {
+    throw new Error('Perfil não encontrado.');
+  }
+
+  if (profileSnap.data().isSystem) {
+    throw new Error('Perfis do sistema não podem ser editados.');
+  }
+
+  const parsed = AclProfileSchema.parse(data);
+
+  await updateDoc(profileRef, {
+    name: parsed.name.trim(),
+    description: parsed.description?.trim() ?? '',
+    permissions: parsed.permissions,
+  });
+
+  revalidatePath('/settings/acl');
+}
+
+export async function deleteAclProfile(
+  companyId: string,
+  actorRole: UserRole,
+  profileId: string
+) {
+  if (!can(actorRole, 'acl', 'delete')) {
+    throw new Error('Permissão insuficiente para excluir perfis de acesso.');
+  }
+
+  const profileRef = doc(db, 'acl_profiles', profileId);
+  const profileSnap = await getDoc(profileRef);
+
+  if (!profileSnap.exists() || profileSnap.data().companyId !== companyId) {
+    throw new Error('Perfil não encontrado.');
+  }
+
+  if (profileSnap.data().isSystem) {
+    throw new Error('Perfis do sistema não podem ser excluídos.');
+  }
+
+  // Remove profile assignment from all members using this profile
+  const membershipsQuery = query(
+    collection(db, 'company_memberships'),
+    where('companyId', '==', companyId),
+    where('aclProfileId', '==', profileId)
+  );
+  const membershipsSnap = await getDocs(membershipsQuery);
+  await Promise.all(
+    membershipsSnap.docs.map((membershipDoc) =>
+      updateDoc(membershipDoc.ref, { aclProfileId: null })
+    )
+  );
+
+  await deleteDoc(profileRef);
+
+  revalidatePath('/settings/acl');
+}
+
+export async function assignAclProfile(
+  companyId: string,
+  actorRole: UserRole,
+  membershipId: string,
+  profileId: string | null
+) {
+  if (!can(actorRole, 'acl', 'update')) {
+    throw new Error('Permissão insuficiente para atribuir perfis de acesso.');
+  }
+
+  const membershipRef = doc(db, 'company_memberships', membershipId);
+  const membershipSnap = await getDoc(membershipRef);
+
+  if (!membershipSnap.exists() || membershipSnap.data().companyId !== companyId) {
+    throw new Error('Membro não encontrado.');
+  }
+
+  if (profileId !== null) {
+    const profileRef = doc(db, 'acl_profiles', profileId);
+    const profileSnap = await getDoc(profileRef);
+    if (!profileSnap.exists() || profileSnap.data().companyId !== companyId) {
+      throw new Error('Perfil não encontrado.');
+    }
+  }
+
+  await updateDoc(membershipRef, { aclProfileId: profileId ?? null });
+
+  revalidatePath('/settings/acl');
+}
+
+export async function inviteMember(
+  companyId: string,
+  actorRole: UserRole,
+  data: { email: string; role: UserRole; aclProfileId?: string }
+) {
+  if (!can(actorRole, 'users', 'create')) {
+    throw new Error('Permissão insuficiente para convidar membros.');
+  }
+
+  const InviteSchema = z.object({
+    email: z.string().email(),
+    role: z.enum(['admin', 'manager', 'financial', 'viewer']),
+    aclProfileId: z.string().optional(),
+  });
+
+  const parsed = InviteSchema.parse(data);
+
+  // Check if already a member
+  const existingQuery = query(
+    collection(db, 'company_memberships'),
+    where('companyId', '==', companyId),
+    where('email', '==', parsed.email.toLowerCase())
+  );
+  const existingSnap = await getDocs(existingQuery);
+  if (!existingSnap.empty) {
+    throw new Error('Este e-mail já é membro da empresa.');
+  }
+
+  await addDoc(collection(db, 'company_memberships'), {
+    companyId,
+    userId: '',
+    email: parsed.email.toLowerCase(),
+    role: parsed.role,
+    status: 'invited',
+    aclProfileId: parsed.aclProfileId ?? null,
+    createdAt: serverTimestamp(),
+  });
+
+  revalidatePath('/settings/acl');
 }
 
 function slugifyCompanyName(name: string): string {
