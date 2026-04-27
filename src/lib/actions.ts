@@ -65,10 +65,10 @@ export async function createClient(companyId: string, actorRole: UserRole, data:
     await addDoc(collection(db, 'clients'), {
       companyId,
       name,
-      email,
-      phone,
+      email: email ?? null,
+      phone: phone ?? null,
       billingType,
-      cpf,
+      cpf: cpf ?? null,
       address: 'Endereço mockado',
       vehicles: [],
     });
