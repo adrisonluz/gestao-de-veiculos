@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   PanelLeft,
   PieChart,
+  ShieldCheck,
   Users,
 } from 'lucide-react';
 
@@ -29,6 +30,7 @@ const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Painel' },
   { href: '/clients', icon: Users, label: 'Clientes' },
   { href: '/reports', icon: PieChart, label: 'Relatórios' },
+  { href: '/settings/acl', icon: ShieldCheck, label: 'Controle de Acesso' },
 ];
 
 export function MainLayout({ children }: { children: ReactNode }) {

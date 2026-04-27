@@ -1,7 +1,7 @@
 
 import { db } from './firebase';
-import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore';
-import type { Client, FinancialRecord, Vehicle } from './definitions';
+import { collection, getDocs, doc, getDoc, query, where, orderBy } from 'firebase/firestore';
+import type { AclProfile, Client, CompanyMember, FinancialRecord, Vehicle } from './definitions';
 
 function mapLegacyVehicle(vehicle: any, fallbackId: string): Vehicle {
   return {
@@ -102,4 +102,68 @@ export async function getFinancialRecords(companyId: string): Promise<FinancialR
     } as FinancialRecord;
   });
   return recordList;
+}
+
+export async function fetchAclProfiles(companyId: string): Promise<AclProfile[]> {
+  const profilesCol = collection(db, 'acl_profiles');
+  const profilesQuery = query(
+    profilesCol,
+    where('companyId', '==', companyId),
+    orderBy('createdAt', 'asc')
+  );
+  const snapshot = await getDocs(profilesQuery);
+  return snapshot.docs.map((profileDoc) => {
+    const data = profileDoc.data();
+    return {
+      id: profileDoc.id,
+      companyId: data.companyId,
+      name: data.name,
+      description: data.description ?? '',
+      permissions: data.permissions ?? {},
+      isSystem: data.isSystem ?? false,
+      createdAt: data.createdAt?.toDate() ?? new Date(),
+      createdBy: data.createdBy ?? '',
+    } as AclProfile;
+  });
+}
+
+export async function fetchAclProfileById(companyId: string, profileId: string): Promise<AclProfile | null> {
+  const profileRef = doc(db, 'acl_profiles', profileId);
+  const profileSnap = await getDoc(profileRef);
+  if (!profileSnap.exists()) return null;
+  const data = profileSnap.data();
+  if (data.companyId !== companyId) return null;
+  return {
+    id: profileSnap.id,
+    companyId: data.companyId,
+    name: data.name,
+    description: data.description ?? '',
+    permissions: data.permissions ?? {},
+    isSystem: data.isSystem ?? false,
+    createdAt: data.createdAt?.toDate() ?? new Date(),
+    createdBy: data.createdBy ?? '',
+  } as AclProfile;
+}
+
+export async function fetchCompanyMembers(companyId: string): Promise<CompanyMember[]> {
+  const membershipsCol = collection(db, 'company_memberships');
+  const membershipsQuery = query(membershipsCol, where('companyId', '==', companyId));
+  const snapshot = await getDocs(membershipsQuery);
+
+  const profiles = await fetchAclProfiles(companyId);
+  const profileMap = new Map(profiles.map((p) => [p.id, p.name]));
+
+  return snapshot.docs.map((memberDoc) => {
+    const data = memberDoc.data();
+    return {
+      membershipId: memberDoc.id,
+      userId: data.userId,
+      email: data.email ?? '',
+      displayName: data.displayName,
+      role: data.role,
+      status: data.status,
+      aclProfileId: data.aclProfileId,
+      aclProfileName: data.aclProfileId ? profileMap.get(data.aclProfileId) : undefined,
+    } as CompanyMember;
+  });
 }
