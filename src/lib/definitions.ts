@@ -1,6 +1,12 @@
 
 export type UserRole = 'owner' | 'admin' | 'manager' | 'financial' | 'viewer';
 
+export type UploadedFile = {
+  url: string;
+  name: string;
+  path: string;
+};
+
 export type Company = {
   id: string;
   name: string;
@@ -25,20 +31,25 @@ export type Client = {
   id: string;
   companyId: string;
   name: string;
-  email: string;
+  email?: string;
   phone?: string;
   address: string;
   cpf: string;
   billingType: 'manual' | 'automatic';
   vehicles: Vehicle[];
+  documents: UploadedFile[];
 };
 
 export type Vehicle = {
   id: string;
   plate: string;
   model: string;
+  brand?: string;
+  year?: string;
+  color?: string;
   value: number;
   images: string[];
+  files: UploadedFile[];
 };
 
 export type FinancialRecord = {

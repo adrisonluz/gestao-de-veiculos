@@ -27,7 +27,7 @@ import type { UserRole } from '@/lib/definitions';
 
 const formSchema = z.object({
   name: z.string().min(2, 'O nome deve ter pelo menos 2 caracteres.'),
-  email: z.string().email('Endereço de e-mail inválido.'),
+  email: z.string().email('Endereço de e-mail inválido.').optional().or(z.literal('')),
   phone: z.string().optional(),
   cpf: z.string().optional(),
   billingType: z.enum(['manual', 'automatic']).default('manual'),

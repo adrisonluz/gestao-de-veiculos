@@ -23,7 +23,10 @@ import type { UserRole } from './definitions';
 
 const FormSchema = z.object({
   name: z.string(),
-  email: z.string().email().transform((value) => value.trim().toLowerCase()),
+  email: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+    z.string().email().transform((value) => value.trim().toLowerCase()).optional()
+  ),
   phone: z
     .string()
     .optional()
@@ -111,6 +114,37 @@ export async function createVehicle(
       throw error;
     }
   }
+
+export async function updateVehicle(
+  companyId: string,
+  actorRole: UserRole,
+  clientId: string,
+  vehicleId: string,
+  data: z.infer<typeof VehicleSchema>
+) {
+  if (!can(actorRole, 'vehicles', 'update')) {
+    throw new Error('Permissão insuficiente para editar veículos.');
+  }
+
+  const { plate, model, brand, year, color, value } = VehicleSchema.parse(data);
+  const clientRef = doc(db, 'clients', clientId);
+  const vehicleRef = doc(clientRef, 'vehicles', vehicleId);
+
+  try {
+    const clientSnap = await getDoc(clientRef);
+
+    if (!clientSnap.exists() || clientSnap.data().companyId !== companyId) {
+      throw new Error('Cliente não pertence à empresa ativa.');
+    }
+
+    await updateDoc(vehicleRef, { plate, model, brand, year, color, value });
+    revalidatePath(`/clients/${clientId}`);
+    revalidatePath(`/clients/${clientId}/vehicles/${vehicleId}`);
+  } catch (error) {
+    console.error('Error updating vehicle:', error);
+    throw error;
+  }
+}
 
 export async function deleteClient(companyId: string, actorRole: UserRole, clientId: string) {
   if (!can(actorRole, 'clients', 'delete')) {

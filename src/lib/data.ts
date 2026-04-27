@@ -8,8 +8,12 @@ function mapLegacyVehicle(vehicle: any, fallbackId: string): Vehicle {
     id: vehicle?.id ?? fallbackId,
     plate: vehicle?.plate ?? '',
     model: vehicle?.model ?? '',
+    brand: vehicle?.brand,
+    year: vehicle?.year,
+    color: vehicle?.color,
     value: Number(vehicle?.value ?? 0),
     images: Array.isArray(vehicle?.images) ? vehicle.images : [],
+    files: Array.isArray(vehicle?.files) ? vehicle.files : [],
   };
 }
 
@@ -45,6 +49,7 @@ export async function fetchClients(companyId: string): Promise<Client[]> {
       cpf: clientData.cpf,
       billingType: clientData.billingType,
       vehicles: vehicles || [],
+      documents: Array.isArray(clientData.documents) ? clientData.documents : [],
     } as Client;
   }));
 
@@ -73,6 +78,7 @@ export async function fetchClientById(companyId: string, id: string): Promise<Cl
         cpf: data.cpf,
         billingType: data.billingType,
         vehicles: vehicles || [],
+        documents: Array.isArray(data.documents) ? data.documents : [],
       } as Client;
     } else {
       return null;
