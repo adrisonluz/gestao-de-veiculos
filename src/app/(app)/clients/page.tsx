@@ -82,7 +82,6 @@ export default function ClientsPage() {
               <CreateClientForm
                 onSuccess={handleClientCreated}
                 companyId={activeCompanyId}
-                actorRole={activeRole}
               />
             ) : null}
           </DialogContent>
@@ -100,7 +99,6 @@ export default function ClientsPage() {
             <ClientList
               clients={clients}
               companyId={activeCompanyId}
-              actorRole={activeRole}
               onClientDeleted={handleClientDeleted}
             />
           ) : (

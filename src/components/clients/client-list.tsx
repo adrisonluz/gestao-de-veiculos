@@ -18,38 +18,40 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import type { Client, UserRole } from '@/lib/definitions';
+import type { Client } from '@/lib/definitions';
 import { deleteClient } from '@/lib/actions';
+import { useAuth } from '@/hooks/use-auth';
 
 type ClientListProps = {
   clients: Client[];
   companyId: string;
-  actorRole: UserRole;
   onClientDeleted?: (clientId: string) => void;
 };
 
-export function ClientList({ clients, companyId, actorRole, onClientDeleted }: ClientListProps) {
+export function ClientList({ clients, companyId, onClientDeleted }: ClientListProps) {
   const router = useRouter();
+  const { activeRole, activeAclProfile } = useAuth();
 
   const handleViewDetails = (clientId: string) => {
     router.push(`/clients/${clientId}`);
   };
 
   const handleDeleteClient = async (clientId: string) => {
+    if (!activeRole) return;
     const confirmed = window.confirm('Tem certeza que deseja excluir este cliente?');
     if (!confirmed) {
       return;
     }
 
     try {
-      await deleteClient(companyId, actorRole, clientId);
+      await deleteClient(companyId, activeRole, activeAclProfile?.id ?? null, clientId);
       onClientDeleted?.(clientId);
     } catch (error) {
       console.error(error);
       window.alert('Não foi possível excluir o cliente. Tente novamente.');
     }
   };
-  
+
   return (
     <Table>
       <TableHeader>

@@ -23,7 +23,7 @@ import {
   } from '@/components/ui/select';
 import { formatDateForInput } from '@/lib/input-masks';
 import { createBilling } from '@/lib/actions';
-import type { UserRole } from '@/lib/definitions';
+import { useAuth } from '@/hooks/use-auth';
 
 const formSchema = z.object({
   vehicleId: z.string().optional(),
@@ -34,18 +34,17 @@ const formSchema = z.object({
 
 export function CreateBillingForm({
   companyId,
-  actorRole,
   client,
   onSuccess,
 }: {
   companyId: string;
-  actorRole: UserRole;
   client: any;
   onSuccess: () => Promise<void> | void;
 }) {
-    const nextMonth = new Date();
-    nextMonth.setMonth(nextMonth.getMonth() + 1);
-    nextMonth.setDate(10);
+  const { activeRole, activeAclProfile } = useAuth();
+  const nextMonth = new Date();
+  nextMonth.setMonth(nextMonth.getMonth() + 1);
+  nextMonth.setDate(10);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -58,11 +57,11 @@ export function CreateBillingForm({
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!activeRole) return;
     try {
-      await createBilling(companyId, actorRole, client.id, values);
+      await createBilling(companyId, activeRole, activeAclProfile?.id ?? null, client.id, values);
       await onSuccess();
     } catch (error) {
-      // TODO: Handle error with a toast notification
       console.error(error);
     }
   }

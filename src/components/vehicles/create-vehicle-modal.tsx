@@ -12,18 +12,15 @@ import {
 } from '@/components/ui/dialog';
 import { CreateVehicleForm } from './create-vehicle-form';
 import { PlusCircle } from 'lucide-react';
-import type { UserRole } from '@/lib/definitions';
 
 export function CreateVehicleModal({
   clientId,
   companyId,
-  actorRole,
   disabled,
   onVehicleCreated,
 }: {
   clientId: string;
   companyId: string;
-  actorRole: UserRole;
   disabled?: boolean;
   onVehicleCreated?: () => Promise<void> | void;
 }) {
@@ -47,7 +44,6 @@ export function CreateVehicleModal({
         <CreateVehicleForm
           clientId={clientId}
           companyId={companyId}
-          actorRole={actorRole}
           onSuccess={async () => {
             if (onVehicleCreated) {
               await onVehicleCreated();

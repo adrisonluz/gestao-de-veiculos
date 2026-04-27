@@ -12,17 +12,14 @@ import {
 } from '@/components/ui/dialog';
 import { CreateBillingForm } from './create-billing-form';
 import { DollarSign } from 'lucide-react';
-import type { UserRole } from '@/lib/definitions';
 
 export function CreateBillingModal({
   companyId,
-  actorRole,
   client,
   disabled,
   onBillingCreated,
 }: {
   companyId: string;
-  actorRole: UserRole;
   client: any;
   disabled?: boolean;
   onBillingCreated?: () => Promise<void> | void;
@@ -46,7 +43,6 @@ export function CreateBillingModal({
         </DialogHeader>
         <CreateBillingForm
           companyId={companyId}
-          actorRole={actorRole}
           client={client}
           onSuccess={async () => {
             if (onBillingCreated) {

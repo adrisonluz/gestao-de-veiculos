@@ -15,7 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { CurrencyInputComponent } from '@/components/ui/currency-input';
 import { createVehicle } from '@/lib/actions';
-import type { UserRole } from '@/lib/definitions';
+import { useAuth } from '@/hooks/use-auth';
 
 const formSchema = z.object({
   plate: z.string().min(7, 'A placa deve ter 7 caracteres.'),
@@ -29,14 +29,14 @@ const formSchema = z.object({
 export function CreateVehicleForm({
   clientId,
   companyId,
-  actorRole,
   onSuccess,
 }: {
   clientId: string;
   companyId: string;
-  actorRole: UserRole;
   onSuccess: () => void;
 }) {
+  const { activeRole, activeAclProfile } = useAuth();
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -50,11 +50,11 @@ export function CreateVehicleForm({
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!activeRole) return;
     try {
-      await createVehicle(companyId, actorRole, clientId, values);
+      await createVehicle(companyId, activeRole, activeAclProfile?.id ?? null, clientId, values);
       onSuccess();
     } catch (error) {
-      // TODO: Handle error with a toast notification
       console.error(error);
     }
   }

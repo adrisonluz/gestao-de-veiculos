@@ -43,7 +43,7 @@ const statusBadgeVariant: Record<BillingStatus, string> = {
 };
 
 export default function ReportsPage() {
-  const { activeCompanyId, activeRole } = useAuth();
+  const { activeCompanyId, activeRole, activeAclProfile } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [financialRecords, setFinancialRecords] = useState<FinancialRecord[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<FinancialRecord[]>([]);
@@ -121,7 +121,7 @@ export default function ReportsPage() {
     if (!activeCompanyId || !activeRole) return;
     setUpdatingId(recordId);
     try {
-      await updateBillingStatus(activeCompanyId, activeRole, recordId, newStatus);
+      await updateBillingStatus(activeCompanyId, activeRole, activeAclProfile?.id ?? null, recordId, newStatus);
       const update = (prev: FinancialRecord[]) =>
         prev.map((r) => (r.id === recordId ? { ...r, status: newStatus } : r));
       setFinancialRecords(update);

@@ -34,7 +34,7 @@ import { useAuth } from '@/hooks/use-auth';
 import type { AclProfile, CompanyMember } from '@/lib/definitions';
 
 export default function AclPage() {
-  const { user, activeCompanyId, activeRole, hasPermission } = useAuth();
+  const { user, activeCompanyId, activeRole, activeAclProfile, hasPermission } = useAuth();
   const [profiles, setProfiles] = useState<AclProfile[]>([]);
   const [members, setMembers] = useState<CompanyMember[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<AclProfile | null>(null);
@@ -82,7 +82,7 @@ export default function AclPage() {
   const handleDeleteProfile = async (profileId: string) => {
     if (!activeCompanyId || !activeRole) return;
     try {
-      await deleteAclProfile(activeCompanyId, activeRole, profileId);
+      await deleteAclProfile(activeCompanyId, activeRole, activeAclProfile?.id ?? null, profileId);
       if (selectedProfile?.id === profileId) setSelectedProfile(null);
       await loadProfiles();
       await loadMembers();
@@ -106,18 +106,16 @@ export default function AclPage() {
   return (
     <>
       <PageHeader title="Controle de Acesso (ACL)">
-        {canManageUsers && activeCompanyId && activeRole && (
+        {canManageUsers && activeCompanyId && (
           <InviteMemberModal
             companyId={activeCompanyId}
-            actorRole={activeRole}
             profiles={profiles}
             onSuccess={loadMembers}
           />
         )}
-        {canManageAcl && activeCompanyId && activeRole && (
+        {canManageAcl && activeCompanyId && (
           <CreateProfileModal
             companyId={activeCompanyId}
-            actorRole={activeRole}
             onSuccess={loadProfiles}
           />
         )}
@@ -175,7 +173,7 @@ export default function AclPage() {
                             {profile.isSystem && (
                               <Badge variant="outline" className="text-xs">Sistema</Badge>
                             )}
-                            {canManageAcl && !profile.isSystem && activeCompanyId && activeRole && (
+                            {canManageAcl && !profile.isSystem && activeCompanyId && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button
@@ -228,12 +226,11 @@ export default function AclPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {selectedProfile && activeCompanyId && activeRole ? (
+                {selectedProfile && activeCompanyId ? (
                   <ProfilePermissionEditor
                     key={selectedProfile.id}
                     profile={selectedProfile}
                     companyId={activeCompanyId}
-                    actorRole={activeRole}
                     onSaved={loadProfiles}
                   />
                 ) : (
@@ -259,12 +256,11 @@ export default function AclPage() {
             <CardContent>
               {loadingMembers ? (
                 <p className="text-sm text-muted-foreground">Carregando membros...</p>
-              ) : activeCompanyId && activeRole && user ? (
+              ) : activeCompanyId && user ? (
                 <MembersTable
                   members={members}
                   profiles={profiles}
                   companyId={activeCompanyId}
-                  actorRole={activeRole}
                   currentUserId={user.uid}
                   canManage={canManageAcl}
                   onRefresh={async () => { await loadMembers(); await loadProfiles(); }}

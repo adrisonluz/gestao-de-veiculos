@@ -24,7 +24,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { createAclProfile } from '@/lib/actions';
-import type { UserRole } from '@/lib/definitions';
+import { useAuth } from '@/hooks/use-auth';
 
 const formSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').max(60),
@@ -33,13 +33,12 @@ const formSchema = z.object({
 
 export function CreateProfileModal({
   companyId,
-  actorRole,
   onSuccess,
 }: {
   companyId: string;
-  actorRole: UserRole;
   onSuccess: () => void;
 }) {
+  const { activeRole, activeAclProfile } = useAuth();
   const [open, setOpen] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -48,8 +47,9 @@ export function CreateProfileModal({
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!activeRole) return;
     try {
-      await createAclProfile(companyId, actorRole, {
+      await createAclProfile(companyId, activeRole, activeAclProfile?.id ?? null, {
         name: values.name,
         description: values.description,
         permissions: {},

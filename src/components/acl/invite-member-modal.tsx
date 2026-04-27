@@ -30,44 +30,36 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { inviteMember } from '@/lib/actions';
-import type { AclProfile, UserRole } from '@/lib/definitions';
+import type { AclProfile } from '@/lib/definitions';
+import { useAuth } from '@/hooks/use-auth';
 
 const formSchema = z.object({
   email: z.string().email('E-mail inválido'),
-  role: z.enum(['admin', 'manager', 'financial', 'viewer']),
   aclProfileId: z.string().optional(),
 });
 
-const ROLE_LABELS: Record<string, string> = {
-  admin: 'Administrador',
-  manager: 'Gerente',
-  financial: 'Financeiro',
-  viewer: 'Visualizador',
-};
-
 export function InviteMemberModal({
   companyId,
-  actorRole,
   profiles,
   onSuccess,
 }: {
   companyId: string;
-  actorRole: UserRole;
   profiles: AclProfile[];
   onSuccess: () => void;
 }) {
+  const { activeRole, activeAclProfile } = useAuth();
   const [open, setOpen] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { email: '', role: 'viewer', aclProfileId: undefined },
+    defaultValues: { email: '', aclProfileId: undefined },
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!activeRole) return;
     try {
-      await inviteMember(companyId, actorRole, {
+      await inviteMember(companyId, activeRole, activeAclProfile?.id ?? null, {
         email: values.email,
-        role: values.role as UserRole,
         aclProfileId: values.aclProfileId,
       });
       form.reset();
@@ -105,30 +97,6 @@ export function InviteMemberModal({
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="role"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Função</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione a função" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {Object.entries(ROLE_LABELS).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             {profiles.length > 0 && (
               <FormField
                 control={form.control}
@@ -142,11 +110,11 @@ export function InviteMemberModal({
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Usar permissões da função" />
+                          <SelectValue placeholder="Sem perfil (sem acesso)" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="__none__">Usar permissões da função</SelectItem>
+                        <SelectItem value="__none__">Sem perfil (sem acesso)</SelectItem>
                         {profiles.map((profile) => (
                           <SelectItem key={profile.id} value={profile.id}>
                             {profile.name}

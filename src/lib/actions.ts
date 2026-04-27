@@ -18,8 +18,34 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { can } from './rbac';
-import type { PermissionSet, UserRole } from './definitions';
+import { canWithProfile, type Resource, type Action } from './rbac';
+import type { AclProfile, PermissionSet, UserRole } from './definitions';
+
+async function checkPermission(
+  companyId: string,
+  actorRole: UserRole,
+  aclProfileId: string | null | undefined,
+  resource: Resource,
+  action: Action
+): Promise<boolean> {
+  if (actorRole === 'owner') return true;
+  if (!aclProfileId) return false;
+  const profileRef = doc(db, 'acl_profiles', aclProfileId);
+  const profileSnap = await getDoc(profileRef);
+  if (!profileSnap.exists() || profileSnap.data().companyId !== companyId) return false;
+  const data = profileSnap.data();
+  const profile: AclProfile = {
+    id: profileSnap.id,
+    companyId: data.companyId,
+    name: data.name,
+    description: data.description ?? '',
+    permissions: data.permissions ?? {},
+    isSystem: data.isSystem ?? false,
+    createdAt: data.createdAt?.toDate() ?? new Date(),
+    createdBy: data.createdBy ?? '',
+  };
+  return canWithProfile(profile, resource, action);
+}
 
 const FormSchema = z.object({
   name: z.string(),
@@ -54,8 +80,13 @@ const BillingSchema = z.object({
   status: z.enum(['Em aberto', 'Vencido', 'Pago', 'Cancelado']),
 });
 
-export async function createClient(companyId: string, actorRole: UserRole, data: z.infer<typeof CreateClient>) {
-  if (!can(actorRole, 'clients', 'create')) {
+export async function createClient(
+  companyId: string,
+  actorRole: UserRole,
+  aclProfileId: string | null | undefined,
+  data: z.infer<typeof CreateClient>
+) {
+  if (!await checkPermission(companyId, actorRole, aclProfileId, 'clients', 'create')) {
     throw new Error('Permissão insuficiente para criar clientes.');
   }
 
@@ -82,17 +113,18 @@ export async function createClient(companyId: string, actorRole: UserRole, data:
 export async function createVehicle(
   companyId: string,
   actorRole: UserRole,
+  aclProfileId: string | null | undefined,
   clientId: string,
   data: z.infer<typeof VehicleSchema>
 ) {
-    if (!can(actorRole, 'vehicles', 'create')) {
+    if (!await checkPermission(companyId, actorRole, aclProfileId, 'vehicles', 'create')) {
       throw new Error('Permissão insuficiente para criar veículos.');
     }
 
     const { plate, model, brand, year, color, value } = VehicleSchema.parse(data);
     const clientRef = doc(db, 'clients', clientId);
     const vehiclesCol = collection(clientRef, 'vehicles');
-  
+
     try {
       const clientSnap = await getDoc(clientRef);
 
@@ -118,11 +150,12 @@ export async function createVehicle(
 export async function updateVehicle(
   companyId: string,
   actorRole: UserRole,
+  aclProfileId: string | null | undefined,
   clientId: string,
   vehicleId: string,
   data: z.infer<typeof VehicleSchema>
 ) {
-  if (!can(actorRole, 'vehicles', 'update')) {
+  if (!await checkPermission(companyId, actorRole, aclProfileId, 'vehicles', 'update')) {
     throw new Error('Permissão insuficiente para editar veículos.');
   }
 
@@ -146,8 +179,13 @@ export async function updateVehicle(
   }
 }
 
-export async function deleteClient(companyId: string, actorRole: UserRole, clientId: string) {
-  if (!can(actorRole, 'clients', 'delete')) {
+export async function deleteClient(
+  companyId: string,
+  actorRole: UserRole,
+  aclProfileId: string | null | undefined,
+  clientId: string
+) {
+  if (!await checkPermission(companyId, actorRole, aclProfileId, 'clients', 'delete')) {
     throw new Error('Permissão insuficiente para excluir clientes.');
   }
 
@@ -175,10 +213,11 @@ export async function deleteClient(companyId: string, actorRole: UserRole, clien
 export async function createBilling(
   companyId: string,
   actorRole: UserRole,
+  aclProfileId: string | null | undefined,
   clientId: string,
   data: z.infer<typeof BillingSchema>
 ) {
-  if (!can(actorRole, 'billing', 'create')) {
+  if (!await checkPermission(companyId, actorRole, aclProfileId, 'billing', 'create')) {
     throw new Error('Permissão insuficiente para criar cobranças.');
   }
 
@@ -216,10 +255,11 @@ export async function createBilling(
 export async function updateBillingStatus(
   companyId: string,
   actorRole: UserRole,
+  aclProfileId: string | null | undefined,
   recordId: string,
   status: 'Em aberto' | 'Vencido' | 'Pago' | 'Cancelado'
 ) {
-  if (!can(actorRole, 'billing', 'update')) {
+  if (!await checkPermission(companyId, actorRole, aclProfileId, 'billing', 'update')) {
     throw new Error('Permissão insuficiente para editar cobranças.');
   }
 
@@ -245,9 +285,10 @@ const AclProfileSchema = z.object({
 export async function createAclProfile(
   companyId: string,
   actorRole: UserRole,
+  aclProfileId: string | null | undefined,
   data: { name: string; description?: string; permissions: PermissionSet }
 ) {
-  if (!can(actorRole, 'acl', 'create')) {
+  if (!await checkPermission(companyId, actorRole, aclProfileId, 'acl', 'create')) {
     throw new Error('Permissão insuficiente para criar perfis de acesso.');
   }
 
@@ -269,10 +310,11 @@ export async function createAclProfile(
 export async function updateAclProfile(
   companyId: string,
   actorRole: UserRole,
+  aclProfileId: string | null | undefined,
   profileId: string,
   data: { name: string; description?: string; permissions: PermissionSet }
 ) {
-  if (!can(actorRole, 'acl', 'update')) {
+  if (!await checkPermission(companyId, actorRole, aclProfileId, 'acl', 'update')) {
     throw new Error('Permissão insuficiente para editar perfis de acesso.');
   }
 
@@ -301,9 +343,10 @@ export async function updateAclProfile(
 export async function deleteAclProfile(
   companyId: string,
   actorRole: UserRole,
+  aclProfileId: string | null | undefined,
   profileId: string
 ) {
-  if (!can(actorRole, 'acl', 'delete')) {
+  if (!await checkPermission(companyId, actorRole, aclProfileId, 'acl', 'delete')) {
     throw new Error('Permissão insuficiente para excluir perfis de acesso.');
   }
 
@@ -318,7 +361,6 @@ export async function deleteAclProfile(
     throw new Error('Perfis do sistema não podem ser excluídos.');
   }
 
-  // Remove profile assignment from all members using this profile
   const membershipsQuery = query(
     collection(db, 'company_memberships'),
     where('companyId', '==', companyId),
@@ -339,10 +381,11 @@ export async function deleteAclProfile(
 export async function assignAclProfile(
   companyId: string,
   actorRole: UserRole,
+  aclProfileId: string | null | undefined,
   membershipId: string,
   profileId: string | null
 ) {
-  if (!can(actorRole, 'acl', 'update')) {
+  if (!await checkPermission(companyId, actorRole, aclProfileId, 'acl', 'update')) {
     throw new Error('Permissão insuficiente para atribuir perfis de acesso.');
   }
 
@@ -369,21 +412,20 @@ export async function assignAclProfile(
 export async function inviteMember(
   companyId: string,
   actorRole: UserRole,
-  data: { email: string; role: UserRole; aclProfileId?: string }
+  aclProfileId: string | null | undefined,
+  data: { email: string; aclProfileId?: string }
 ) {
-  if (!can(actorRole, 'users', 'create')) {
+  if (!await checkPermission(companyId, actorRole, aclProfileId, 'users', 'create')) {
     throw new Error('Permissão insuficiente para convidar membros.');
   }
 
   const InviteSchema = z.object({
     email: z.string().email(),
-    role: z.enum(['admin', 'manager', 'financial', 'viewer']),
     aclProfileId: z.string().optional(),
   });
 
   const parsed = InviteSchema.parse(data);
 
-  // Check if already a member
   const existingQuery = query(
     collection(db, 'company_memberships'),
     where('companyId', '==', companyId),
@@ -398,7 +440,7 @@ export async function inviteMember(
     companyId,
     userId: '',
     email: parsed.email.toLowerCase(),
-    role: parsed.role,
+    role: 'member',
     status: 'invited',
     aclProfileId: parsed.aclProfileId ?? null,
     createdAt: serverTimestamp(),
@@ -410,7 +452,7 @@ export async function inviteMember(
 function slugifyCompanyName(name: string): string {
   return name
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, '-')

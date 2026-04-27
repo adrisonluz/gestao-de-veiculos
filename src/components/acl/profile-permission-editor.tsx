@@ -7,7 +7,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { updateAclProfile } from '@/lib/actions';
 import { SYSTEM_AREAS } from '@/lib/rbac';
-import type { AclProfile, PermissionSet, SystemAction, SystemArea, UserRole } from '@/lib/definitions';
+import type { AclProfile, PermissionSet, SystemAction, SystemArea } from '@/lib/definitions';
+import { useAuth } from '@/hooks/use-auth';
 
 const ACTION_LABELS: Record<SystemAction, string> = {
   read: 'Visualizar',
@@ -20,14 +21,13 @@ const ACTION_LABELS: Record<SystemAction, string> = {
 export function ProfilePermissionEditor({
   profile,
   companyId,
-  actorRole,
   onSaved,
 }: {
   profile: AclProfile;
   companyId: string;
-  actorRole: UserRole;
   onSaved: () => void;
 }) {
+  const { activeRole, activeAclProfile } = useAuth();
   const [permissions, setPermissions] = useState<PermissionSet>(profile.permissions);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -56,7 +56,8 @@ export function ProfilePermissionEditor({
   const handleSave = async () => {
     setSaving(true);
     try {
-      await updateAclProfile(companyId, actorRole, profile.id, {
+      if (!activeRole) return;
+      await updateAclProfile(companyId, activeRole, activeAclProfile?.id ?? null, profile.id, {
         name: profile.name,
         description: profile.description,
         permissions,

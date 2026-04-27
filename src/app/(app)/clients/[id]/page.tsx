@@ -50,7 +50,7 @@ const statusBadgeVariant: Record<BillingStatus, string> = {
 
 export default function ClientDetailPage() {
   const params = useParams<{ id: string }>();
-  const { activeCompanyId, activeRole, hasPermission } = useAuth();
+  const { activeCompanyId, activeRole, activeAclProfile, hasPermission } = useAuth();
   const [client, setClient] = useState<Client | null>(null);
   const [billingRecords, setBillingRecords] = useState<FinancialRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,7 +86,7 @@ export default function ClientDetailPage() {
     if (!activeCompanyId || !activeRole) return;
     setUpdatingBillingId(recordId);
     try {
-      await updateBillingStatus(activeCompanyId, activeRole, recordId, newStatus);
+      await updateBillingStatus(activeCompanyId, activeRole, activeAclProfile?.id ?? null, recordId, newStatus);
       setBillingRecords((prev) =>
         prev.map((r) => (r.id === recordId ? { ...r, status: newStatus } : r))
       );
@@ -135,6 +135,12 @@ export default function ClientDetailPage() {
                 <p className="text-sm font-medium text-muted-foreground">CPF</p>
                 <p>{client.cpf}</p>
               </div>
+              {client.email && (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Email</p>
+                  <p>{client.email}</p>
+                </div>
+              )}
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Endereço</p>
                 <p>{client.address}</p>
@@ -177,7 +183,6 @@ export default function ClientDetailPage() {
               <CreateVehicleModal
                 clientId={client.id}
                 companyId={activeCompanyId}
-                actorRole={activeRole}
                 disabled={!hasPermission('vehicles', 'create')}
                 onVehicleCreated={loadClient}
               />
@@ -200,7 +205,6 @@ export default function ClientDetailPage() {
               </div>
               <CreateBillingModal
                 companyId={activeCompanyId}
-                actorRole={activeRole}
                 client={client}
                 disabled={!hasPermission('billing', 'create')}
                 onBillingCreated={loadClient}

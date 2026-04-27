@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Settings2, Trash2 } from 'lucide-react';
+import { Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -13,14 +13,11 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { AssignProfileModal } from './assign-profile-modal';
-import type { AclProfile, CompanyMember, UserRole } from '@/lib/definitions';
+import type { AclProfile, CompanyMember } from '@/lib/definitions';
 
 const ROLE_LABELS: Record<string, string> = {
   owner: 'Proprietário',
-  admin: 'Administrador',
-  manager: 'Gerente',
-  financial: 'Financeiro',
-  viewer: 'Visualizador',
+  member: 'Membro',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -39,7 +36,6 @@ export function MembersTable({
   members,
   profiles,
   companyId,
-  actorRole,
   currentUserId,
   canManage,
   onRefresh,
@@ -47,7 +43,6 @@ export function MembersTable({
   members: CompanyMember[];
   profiles: AclProfile[];
   companyId: string;
-  actorRole: UserRole;
   currentUserId: string;
   canManage: boolean;
   onRefresh: () => void;
@@ -101,7 +96,7 @@ export function MembersTable({
                   {member.aclProfileName ? (
                     <Badge variant="secondary">{member.aclProfileName}</Badge>
                   ) : (
-                    <span className="text-sm text-muted-foreground">Padrão (função)</span>
+                    <span className="text-sm text-muted-foreground">Sem perfil atribuído</span>
                   )}
                 </TableCell>
                 {canManage && (
@@ -129,7 +124,6 @@ export function MembersTable({
           member={assigningMember}
           profiles={profiles}
           companyId={companyId}
-          actorRole={actorRole}
           open={!!assigningMember}
           onOpenChange={(open) => { if (!open) setAssigningMember(null); }}
           onSuccess={() => {

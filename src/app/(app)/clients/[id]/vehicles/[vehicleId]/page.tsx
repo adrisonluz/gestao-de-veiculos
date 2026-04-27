@@ -46,7 +46,7 @@ const formSchema = z.object({
 export default function VehiclePage() {
   const params = useParams<{ id: string; vehicleId: string }>();
   const router = useRouter();
-  const { activeCompanyId, activeRole, hasPermission } = useAuth();
+  const { activeCompanyId, activeRole, activeAclProfile, hasPermission } = useAuth();
 
   const [client, setClient] = useState<Client | null>(null);
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
@@ -102,7 +102,7 @@ export default function VehiclePage() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!activeCompanyId || !activeRole || !params?.id || !params?.vehicleId) return;
-    await updateVehicle(activeCompanyId, activeRole, params.id, params.vehicleId, values);
+    await updateVehicle(activeCompanyId, activeRole, activeAclProfile?.id ?? null, params.id, params.vehicleId, values);
     setVehicle((prev) => prev ? { ...prev, ...values } : prev);
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);

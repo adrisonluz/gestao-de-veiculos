@@ -1,5 +1,5 @@
 
-export type UserRole = 'owner' | 'admin' | 'manager' | 'financial' | 'viewer';
+export type UserRole = 'owner' | 'member';
 
 export type UploadedFile = {
   url: string;
