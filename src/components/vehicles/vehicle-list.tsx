@@ -18,13 +18,34 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal } from 'lucide-react';
+import { deleteVehicle } from '@/lib/actions';
+import { useAuth } from '@/hooks/use-auth';
 
 type VehicleListProps = {
   vehicles: Vehicle[];
   clientId?: string;
+  onVehicleDeleted?: (vehicleId: string) => void;
 };
 
-export function VehicleList({ vehicles, clientId }: VehicleListProps) {
+export function VehicleList({ vehicles, clientId, onVehicleDeleted }: VehicleListProps) {
+  const { activeCompanyId, activeRole, activeAclProfile } = useAuth();
+
+  const handleDeleteVehicle = async (vehicleId: string) => {
+    if (!clientId || !activeCompanyId || !activeRole) return;
+    const confirmed = window.confirm('Tem certeza que deseja excluir este veículo?');
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteVehicle(activeCompanyId, activeRole, activeAclProfile?.id ?? null, clientId, vehicleId);
+      onVehicleDeleted?.(vehicleId);
+    } catch (error) {
+      console.error(error);
+      window.alert('Não foi possível excluir o veículo. Tente novamente.');
+    }
+  };
+
   if (vehicles.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">Nenhum veículo cadastrado.</p>
@@ -78,7 +99,12 @@ export function VehicleList({ vehicles, clientId }: VehicleListProps) {
                       </Link>
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem className="text-destructive">Excluir</DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    onClick={() => void handleDeleteVehicle(vehicle.id)}
+                  >
+                    Excluir
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </TableCell>

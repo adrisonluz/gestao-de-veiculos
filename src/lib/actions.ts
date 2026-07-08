@@ -179,6 +179,35 @@ export async function updateVehicle(
   }
 }
 
+export async function deleteVehicle(
+  companyId: string,
+  actorRole: UserRole,
+  aclProfileId: string | null | undefined,
+  clientId: string,
+  vehicleId: string
+) {
+  if (!await checkPermission(companyId, actorRole, aclProfileId, 'vehicles', 'delete')) {
+    throw new Error('Permissão insuficiente para excluir veículos.');
+  }
+
+  const clientRef = doc(db, 'clients', clientId);
+  const vehicleRef = doc(clientRef, 'vehicles', vehicleId);
+
+  try {
+    const clientSnap = await getDoc(clientRef);
+
+    if (!clientSnap.exists() || clientSnap.data().companyId !== companyId) {
+      throw new Error('Cliente não pertence à empresa ativa.');
+    }
+
+    await deleteDoc(vehicleRef);
+    revalidatePath(`/clients/${clientId}`);
+  } catch (error) {
+    console.error('Error deleting vehicle:', error);
+    throw error;
+  }
+}
+
 export async function deleteClient(
   companyId: string,
   actorRole: UserRole,

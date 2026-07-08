@@ -191,6 +191,7 @@ export default function ClientDetailPage() {
               <VehicleList
                 vehicles={client.vehicles}
                 clientId={client.id}
+                onVehicleDeleted={loadClient}
               />
             </CardContent>
           </Card>
