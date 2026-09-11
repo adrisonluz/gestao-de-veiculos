@@ -1,0 +1,11 @@
+// Cópia de referência da regra publicada manualmente no Firebase Console (Storage > Rules).
+// Não há firebase.json/CLI configurado neste projeto, então editar este arquivo não
+// atualiza a regra em produção — publique também no console ao alterar.
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
