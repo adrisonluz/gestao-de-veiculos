@@ -10,7 +10,7 @@ export type AreaConfig = {
 
 export const SYSTEM_AREAS: Record<SystemArea, AreaConfig> = {
   dashboard: { label: 'Painel', actions: ['read'] },
-  clients: { label: 'Clientes', actions: ['read', 'create', 'update', 'delete'] },
+  clients: { label: 'Clientes', actions: ['read', 'create', 'update', 'delete', 'export'] },
   vehicles: { label: 'Veículos', actions: ['read', 'create', 'update', 'delete'] },
   financialRecords: { label: 'Registros Financeiros', actions: ['read', 'create', 'update', 'delete'] },
   billing: { label: 'Cobranças', actions: ['read', 'create', 'update', 'delete'] },

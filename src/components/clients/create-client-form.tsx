@@ -14,6 +14,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -22,15 +23,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { createClient } from '@/lib/actions';
-import { applyPhoneMask, normalizeEmail } from '@/lib/input-masks';
+import { applyCpfCnpjMask, applyPhoneMask, isValidCpfOrCnpj, normalizeEmail } from '@/lib/input-masks';
 import { useAuth } from '@/hooks/use-auth';
 
 const formSchema = z.object({
   name: z.string().min(2, 'O nome deve ter pelo menos 2 caracteres.'),
   email: z.string().email('Endereço de e-mail inválido.').optional().or(z.literal('')),
   phone: z.string().optional(),
-  cpf: z.string().optional(),
+  cpf: z
+    .string()
+    .optional()
+    .refine((value) => !value || isValidCpfOrCnpj(value), 'CPF/CNPJ inválido.'),
   billingType: z.enum(['manual', 'automatic']).default('manual'),
+  consolidateBilling: z.boolean().default(false),
 });
 
 export function CreateClientForm({
@@ -50,6 +55,7 @@ export function CreateClientForm({
       phone: '',
       cpf: '',
       billingType: 'manual',
+      consolidateBilling: false,
     },
   });
 
@@ -127,7 +133,12 @@ export function CreateClientForm({
             <FormItem>
               <FormLabel>CPF/CNPJ</FormLabel>
               <FormControl>
-                <Input placeholder="000.000.000-00" {...field} />
+                <Input
+                  placeholder="000.000.000-00"
+                  maxLength={18}
+                  {...field}
+                  onChange={(event) => field.onChange(applyCpfCnpjMask(event.target.value))}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -151,6 +162,23 @@ export function CreateClientForm({
                 </SelectContent>
               </Select>
               <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="consolidateBilling"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+              <div className="space-y-0.5">
+                <FormLabel className="text-base">Consolidar cobranças</FormLabel>
+                <p className="text-sm text-muted-foreground">
+                  Gera uma única cobrança somando todos os veículos, em vez de uma por veículo.
+                </p>
+              </div>
+              <FormControl>
+                <Switch checked={field.value} onCheckedChange={field.onChange} />
+              </FormControl>
             </FormItem>
           )}
         />

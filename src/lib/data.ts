@@ -45,9 +45,11 @@ export async function fetchClients(companyId: string): Promise<Client[]> {
       companyId: clientData.companyId,
       name: clientData.name,
       email: clientData.email,
+      phone: clientData.phone,
       address: clientData.address,
       cpf: clientData.cpf,
       billingType: clientData.billingType,
+      consolidateBilling: clientData.consolidateBilling === true,
       vehicles: vehicles || [],
       documents: Array.isArray(clientData.documents) ? clientData.documents : [],
     } as Client;
@@ -74,9 +76,11 @@ export async function fetchClientById(companyId: string, id: string): Promise<Cl
         companyId: data.companyId,
         name: data.name,
         email: data.email,
+        phone: data.phone,
         address: data.address,
         cpf: data.cpf,
         billingType: data.billingType,
+        consolidateBilling: data.consolidateBilling === true,
         vehicles: vehicles || [],
         documents: Array.isArray(data.documents) ? data.documents : [],
       } as Client;
@@ -98,6 +102,8 @@ export async function getFinancialRecords(companyId: string): Promise<FinancialR
       description: data.description,
       amount: data.amount,
       clientId: data.clientId,
+      vehicleId: data.vehicleId ?? undefined,
+      vehiclePlate: data.vehiclePlate ?? undefined,
       status: data.status || 'Sem status',
     } as FinancialRecord;
   });
@@ -164,6 +170,7 @@ export async function fetchCompanyMembers(companyId: string): Promise<CompanyMem
       status: data.status,
       aclProfileId: data.aclProfileId,
       aclProfileName: data.aclProfileId ? profileMap.get(data.aclProfileId) : undefined,
+      invitedAt: data.invitedAt?.toDate(),
     } as CompanyMember;
   });
 }

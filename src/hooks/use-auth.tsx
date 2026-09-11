@@ -6,6 +6,7 @@ import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firesto
 import { auth, db } from '@/lib/firebase';
 import type { AclProfile, CompanyMembership, UserProfile, UserRole } from '@/lib/definitions';
 import { resolvePermission, type Action, type Resource } from '@/lib/rbac';
+import { claimPendingInvites } from '@/lib/actions';
 
 interface AuthContextType {
   user: User | null;
@@ -38,6 +39,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [activeAclProfile, setActiveAclProfile] = useState<AclProfile | null>(null);
 
   const loadTenantContext = async (currentUser: User) => {
+    try {
+      await claimPendingInvites(currentUser.uid, currentUser.email);
+    } catch (error) {
+      console.error('Error claiming pending invites:', error);
+    }
+
     const profileRef = doc(db, 'user_profiles', currentUser.uid);
     const profileSnap = await getDoc(profileRef);
     const profile = profileSnap.exists() ? (profileSnap.data() as UserProfile) : null;

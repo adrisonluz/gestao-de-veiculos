@@ -23,6 +23,8 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { CreateClientForm } from '@/components/clients/create-client-form';
+import { ExportClientsMenu } from '@/components/clients/export-clients-menu';
+import { ImportClientsModal } from '@/components/clients/import-clients-modal';
 import { useAuth } from '@/hooks/use-auth';
 
 export default function ClientsPage() {
@@ -67,6 +69,14 @@ export default function ClientsPage() {
   return (
     <>
       <PageHeader title="Clientes">
+        <ExportClientsMenu clients={clients} disabled={!hasPermission('clients', 'export')} />
+        {activeCompanyId && (
+          <ImportClientsModal
+            companyId={activeCompanyId}
+            disabled={!hasPermission('clients', 'create') && !hasPermission('clients', 'update')}
+            onImported={handleClientCreated}
+          />
+        )}
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
           <DialogTrigger asChild>
             <Button disabled={!hasPermission('clients', 'create') || !activeCompanyId || !activeRole}>

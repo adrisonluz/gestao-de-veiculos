@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import { arrayRemove, arrayUnion, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { fetchClientById, getFinancialRecords } from '@/lib/data';
-import { updateBillingStatus } from '@/lib/actions';
+import { updateBillingStatus, updateClientBillingSettings } from '@/lib/actions';
 import { PageHeader } from '@/components/page-header';
 import {
   Card,
@@ -16,6 +16,8 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -55,6 +57,7 @@ export default function ClientDetailPage() {
   const [billingRecords, setBillingRecords] = useState<FinancialRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingBillingId, setUpdatingBillingId] = useState<string | null>(null);
+  const [savingConsolidation, setSavingConsolidation] = useState(false);
 
   const loadClient = useCallback(async () => {
     if (!activeCompanyId || !params?.id) {
@@ -94,6 +97,19 @@ export default function ClientDetailPage() {
       console.error(err);
     } finally {
       setUpdatingBillingId(null);
+    }
+  }
+
+  async function handleConsolidateBillingChange(checked: boolean) {
+    if (!activeCompanyId || !activeRole || !client) return;
+    setSavingConsolidation(true);
+    try {
+      await updateClientBillingSettings(activeCompanyId, activeRole, activeAclProfile?.id ?? null, client.id, checked);
+      setClient((prev) => (prev ? { ...prev, consolidateBilling: checked } : prev));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSavingConsolidation(false);
     }
   }
 
@@ -150,6 +166,20 @@ export default function ClientDetailPage() {
                 <Badge variant={client.billingType === 'automatic' ? 'default' : 'secondary'}>
                   {client.billingType === 'automatic' ? 'Automática' : 'Manual'}
                 </Badge>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="consolidate-billing" className="text-sm font-medium">Consolidar cobranças</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Gera uma única cobrança somando todos os veículos.
+                  </p>
+                </div>
+                <Switch
+                  id="consolidate-billing"
+                  checked={client.consolidateBilling === true}
+                  disabled={savingConsolidation || !hasPermission('clients', 'update')}
+                  onCheckedChange={handleConsolidateBillingChange}
+                />
               </div>
             </CardContent>
           </Card>

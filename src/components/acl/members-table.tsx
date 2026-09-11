@@ -1,9 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { Settings2 } from 'lucide-react';
+import { Mail, Pencil, Settings2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import {
   Table,
   TableBody,
@@ -13,6 +24,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { AssignProfileModal } from './assign-profile-modal';
+import { EditMemberModal } from './edit-member-modal';
+import { ResendInviteDialog } from './resend-invite-dialog';
+import { removeMember } from '@/lib/actions';
+import { useAuth } from '@/hooks/use-auth';
 import type { AclProfile, CompanyMember } from '@/lib/definitions';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -32,22 +47,51 @@ const STATUS_VARIANTS: Record<string, 'default' | 'secondary' | 'outline' | 'des
   disabled: 'destructive',
 };
 
+function formatRelativeDays(date: Date): string {
+  const days = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+  if (days <= 0) return 'hoje';
+  if (days === 1) return 'há 1 dia';
+  return `há ${days} dias`;
+}
+
 export function MembersTable({
   members,
   profiles,
   companyId,
   currentUserId,
-  canManage,
+  canAssignProfile,
+  canEdit,
+  canRemove,
   onRefresh,
 }: {
   members: CompanyMember[];
   profiles: AclProfile[];
   companyId: string;
   currentUserId: string;
-  canManage: boolean;
+  canAssignProfile: boolean;
+  canEdit: boolean;
+  canRemove: boolean;
   onRefresh: () => void;
 }) {
+  const canManage = canAssignProfile || canEdit || canRemove;
+  const { activeRole, activeAclProfile } = useAuth();
   const [assigningMember, setAssigningMember] = useState<CompanyMember | null>(null);
+  const [editingMember, setEditingMember] = useState<CompanyMember | null>(null);
+  const [resendingMember, setResendingMember] = useState<CompanyMember | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  const handleRemove = async (member: CompanyMember) => {
+    if (!activeRole) return;
+    setRemovingId(member.membershipId);
+    try {
+      await removeMember(companyId, activeRole, activeAclProfile?.id ?? null, member.membershipId);
+      onRefresh();
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setRemovingId(null);
+    }
+  };
 
   return (
     <>
@@ -91,6 +135,11 @@ export function MembersTable({
                   <Badge variant={STATUS_VARIANTS[member.status] ?? 'secondary'}>
                     {STATUS_LABELS[member.status] ?? member.status}
                   </Badge>
+                  {member.status === 'invited' && member.invitedAt && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Convidado {formatRelativeDays(member.invitedAt)}
+                    </p>
+                  )}
                 </TableCell>
                 <TableCell>
                   {member.aclProfileName ? (
@@ -101,16 +150,70 @@ export function MembersTable({
                 </TableCell>
                 {canManage && (
                   <TableCell className="text-right">
-                    {member.role !== 'owner' && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setAssigningMember(member)}
-                        title="Atribuir perfil de acesso"
-                      >
-                        <Settings2 className="h-4 w-4" />
-                      </Button>
-                    )}
+                    <div className="flex items-center justify-end gap-1">
+                      {canEdit && member.status === 'invited' && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setResendingMember(member)}
+                          title="Reenviar convite"
+                        >
+                          <Mail className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {canAssignProfile && member.role !== 'owner' && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setAssigningMember(member)}
+                          title="Atribuir perfil de acesso"
+                        >
+                          <Settings2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {canEdit && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setEditingMember(member)}
+                          title="Editar membro"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {canRemove && member.userId !== currentUserId && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              disabled={removingId === member.membershipId}
+                              title="Remover membro"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Remover membro?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                <strong>{member.email}</strong> perderá o acesso a esta empresa. Esta ação não pode
+                                ser desfeita.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleRemove(member)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Remover
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
+                    </div>
                   </TableCell>
                 )}
               </TableRow>
@@ -130,6 +233,29 @@ export function MembersTable({
             setAssigningMember(null);
             onRefresh();
           }}
+        />
+      )}
+
+      {editingMember && (
+        <EditMemberModal
+          member={editingMember}
+          companyId={companyId}
+          open={!!editingMember}
+          onOpenChange={(open) => { if (!open) setEditingMember(null); }}
+          onSuccess={() => {
+            setEditingMember(null);
+            onRefresh();
+          }}
+        />
+      )}
+
+      {resendingMember && (
+        <ResendInviteDialog
+          member={resendingMember}
+          companyId={companyId}
+          open={!!resendingMember}
+          onOpenChange={(open) => { if (!open) setResendingMember(null); }}
+          onSuccess={onRefresh}
         />
       )}
     </>

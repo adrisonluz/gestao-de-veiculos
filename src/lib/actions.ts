@@ -16,10 +16,12 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { canWithProfile, type Resource, type Action } from './rbac';
 import type { AclProfile, PermissionSet, UserRole } from './definitions';
+import { isValidCpfOrCnpj, isValidPlate } from './input-masks';
 
 async function checkPermission(
   companyId: string,
@@ -59,6 +61,7 @@ const FormSchema = z.object({
     .refine((value) => !value || value.replace(/\D/g, '').length >= 10, 'Telefone inválido'),
   billingType: z.enum(['manual', 'automatic']),
   cpf: z.string().optional(),
+  consolidateBilling: z.boolean().optional().default(false),
 });
 
 const CreateClient = FormSchema;
@@ -75,6 +78,7 @@ const VehicleSchema = z.object({
     value: z.number(),
   });
 const BillingSchema = z.object({
+  vehicleId: z.string().optional(),
   dueDate: z.string(),
   value: z.number().min(0),
   status: z.enum(['Em aberto', 'Vencido', 'Pago', 'Cancelado']),
@@ -90,7 +94,7 @@ export async function createClient(
     throw new Error('Permissão insuficiente para criar clientes.');
   }
 
-  const { name, email, phone, billingType, cpf } = CreateClient.parse(data);
+  const { name, email, phone, billingType, cpf, consolidateBilling } = CreateClient.parse(data);
 
   try {
     await addDoc(collection(db, 'clients'), {
@@ -100,6 +104,7 @@ export async function createClient(
       phone: phone ?? null,
       billingType,
       cpf: cpf ?? null,
+      consolidateBilling,
       address: 'Endereço mockado',
       vehicles: [],
     });
@@ -108,6 +113,28 @@ export async function createClient(
     console.error('Error creating client:', error);
     throw error;
   }
+}
+
+export async function updateClientBillingSettings(
+  companyId: string,
+  actorRole: UserRole,
+  aclProfileId: string | null | undefined,
+  clientId: string,
+  consolidateBilling: boolean
+) {
+  if (!await checkPermission(companyId, actorRole, aclProfileId, 'clients', 'update')) {
+    throw new Error('Permissão insuficiente para editar clientes.');
+  }
+
+  const clientRef = doc(db, 'clients', clientId);
+  const clientSnap = await getDoc(clientRef);
+
+  if (!clientSnap.exists() || clientSnap.data().companyId !== companyId) {
+    throw new Error('Cliente não pertence à empresa ativa.');
+  }
+
+  await updateDoc(clientRef, { consolidateBilling });
+  revalidatePath(`/clients/${clientId}`);
 }
 
 export async function createVehicle(
@@ -250,7 +277,7 @@ export async function createBilling(
     throw new Error('Permissão insuficiente para criar cobranças.');
   }
 
-  const { dueDate, value, status } = BillingSchema.parse(data);
+  const { vehicleId, dueDate, value, status } = BillingSchema.parse(data);
   const clientRef = doc(db, 'clients', clientId);
 
   try {
@@ -260,13 +287,30 @@ export async function createBilling(
       throw new Error('Cliente não pertence à empresa ativa.');
     }
 
+    const consolidateBilling = clientSnap.data().consolidateBilling === true;
+
+    let vehiclePlate: string | null = null;
+    if (!consolidateBilling && vehicleId) {
+      const vehicleSnap = await getDoc(doc(clientRef, 'vehicles', vehicleId));
+      if (vehicleSnap.exists()) {
+        vehiclePlate = vehicleSnap.data().plate ?? null;
+      }
+    }
+
     const dueDateObject = new Date(`${dueDate}T00:00:00`);
+    const description = consolidateBilling
+      ? `Cobrança consolidada (${status})`
+      : vehiclePlate
+        ? `Cobrança (${status}) — ${vehiclePlate}`
+        : `Cobrança (${status})`;
 
     await addDoc(collection(db, 'financialRecords'), {
       companyId,
       clientId,
+      vehicleId: !consolidateBilling && vehicleId ? vehicleId : null,
+      vehiclePlate: !consolidateBilling ? vehiclePlate : null,
       date: Timestamp.fromDate(dueDateObject),
-      description: `Cobrança (${status})`,
+      description,
       amount: value,
       status,
       createdAt: serverTimestamp(),
@@ -438,6 +482,156 @@ export async function assignAclProfile(
   revalidatePath('/settings/acl');
 }
 
+async function countActiveOwners(companyId: string): Promise<number> {
+  const ownersQuery = query(
+    collection(db, 'company_memberships'),
+    where('companyId', '==', companyId),
+    where('role', '==', 'owner'),
+    where('status', '==', 'active')
+  );
+  const snapshot = await getDocs(ownersQuery);
+  return snapshot.size;
+}
+
+export async function updateMemberStatus(
+  companyId: string,
+  actorRole: UserRole,
+  aclProfileId: string | null | undefined,
+  membershipId: string,
+  status: 'active' | 'disabled'
+) {
+  if (!await checkPermission(companyId, actorRole, aclProfileId, 'users', 'update')) {
+    throw new Error('Permissão insuficiente para editar membros.');
+  }
+
+  const membershipRef = doc(db, 'company_memberships', membershipId);
+  const membershipSnap = await getDoc(membershipRef);
+
+  if (!membershipSnap.exists() || membershipSnap.data().companyId !== companyId) {
+    throw new Error('Membro não encontrado.');
+  }
+
+  const memberData = membershipSnap.data();
+
+  if (memberData.role === 'owner' && actorRole !== 'owner') {
+    throw new Error('Apenas proprietários podem alterar o status de outro proprietário.');
+  }
+
+  if (status === 'disabled' && memberData.role === 'owner' && memberData.status === 'active') {
+    if (await countActiveOwners(companyId) <= 1) {
+      throw new Error('Não é possível desativar o único proprietário ativo da empresa.');
+    }
+  }
+
+  await updateDoc(membershipRef, { status });
+  revalidatePath('/settings/acl');
+}
+
+export async function updateMemberRole(
+  companyId: string,
+  actorRole: UserRole,
+  aclProfileId: string | null | undefined,
+  membershipId: string,
+  role: UserRole
+) {
+  if (actorRole !== 'owner') {
+    throw new Error('Apenas proprietários podem alterar a função de um membro.');
+  }
+
+  const membershipRef = doc(db, 'company_memberships', membershipId);
+  const membershipSnap = await getDoc(membershipRef);
+
+  if (!membershipSnap.exists() || membershipSnap.data().companyId !== companyId) {
+    throw new Error('Membro não encontrado.');
+  }
+
+  const memberData = membershipSnap.data();
+
+  if (memberData.role === 'owner' && role === 'member' && memberData.status === 'active') {
+    if (await countActiveOwners(companyId) <= 1) {
+      throw new Error('Não é possível rebaixar o único proprietário ativo da empresa.');
+    }
+  }
+
+  await updateDoc(membershipRef, { role });
+  revalidatePath('/settings/acl');
+}
+
+export async function removeMember(
+  companyId: string,
+  actorRole: UserRole,
+  aclProfileId: string | null | undefined,
+  membershipId: string
+) {
+  if (!await checkPermission(companyId, actorRole, aclProfileId, 'users', 'delete')) {
+    throw new Error('Permissão insuficiente para remover membros.');
+  }
+
+  const membershipRef = doc(db, 'company_memberships', membershipId);
+  const membershipSnap = await getDoc(membershipRef);
+
+  if (!membershipSnap.exists() || membershipSnap.data().companyId !== companyId) {
+    throw new Error('Membro não encontrado.');
+  }
+
+  const memberData = membershipSnap.data();
+
+  if (memberData.role === 'owner' && actorRole !== 'owner') {
+    throw new Error('Apenas proprietários podem remover outro proprietário.');
+  }
+
+  if (memberData.role === 'owner' && memberData.status === 'active') {
+    if (await countActiveOwners(companyId) <= 1) {
+      throw new Error('Não é possível remover o único proprietário ativo da empresa.');
+    }
+  }
+
+  await deleteDoc(membershipRef);
+  revalidatePath('/settings/acl');
+}
+
+export async function resendInvite(
+  companyId: string,
+  actorRole: UserRole,
+  aclProfileId: string | null | undefined,
+  membershipId: string
+) {
+  if (!await checkPermission(companyId, actorRole, aclProfileId, 'users', 'update')) {
+    throw new Error('Permissão insuficiente para reenviar convites.');
+  }
+
+  const membershipRef = doc(db, 'company_memberships', membershipId);
+  const membershipSnap = await getDoc(membershipRef);
+
+  if (!membershipSnap.exists() || membershipSnap.data().companyId !== companyId) {
+    throw new Error('Convite não encontrado.');
+  }
+
+  if (membershipSnap.data().status !== 'invited') {
+    throw new Error('Este membro já está ativo na empresa.');
+  }
+
+  await updateDoc(membershipRef, { invitedAt: serverTimestamp() });
+  revalidatePath('/settings/acl');
+}
+
+export async function claimPendingInvites(userId: string, email: string | null | undefined) {
+  const normalizedEmail = email?.trim().toLowerCase();
+  if (!normalizedEmail) return;
+
+  const invitesQuery = query(
+    collection(db, 'company_memberships'),
+    where('email', '==', normalizedEmail),
+    where('status', '==', 'invited')
+  );
+  const invitesSnap = await getDocs(invitesQuery);
+  if (invitesSnap.empty) return;
+
+  await Promise.all(
+    invitesSnap.docs.map((inviteDoc) => updateDoc(inviteDoc.ref, { userId, status: 'active' }))
+  );
+}
+
 export async function inviteMember(
   companyId: string,
   actorRole: UserRole,
@@ -473,6 +667,7 @@ export async function inviteMember(
     status: 'invited',
     aclProfileId: parsed.aclProfileId ?? null,
     createdAt: serverTimestamp(),
+    invitedAt: serverTimestamp(),
   });
 
   revalidatePath('/settings/acl');
@@ -546,4 +741,172 @@ export async function createInitialCompany(data: z.infer<typeof CreateCompanySch
   revalidatePath('/clients');
 
   return { companyId: companyDoc.id, slug };
+}
+
+const ImportRowSchema = z.object({
+  clientId: z.string().optional(),
+  name: z.string().min(2),
+  email: z.string().optional(),
+  phone: z.string().optional(),
+  cpf: z.string().optional(),
+  billingType: z.enum(['manual', 'automatic']).optional().default('manual'),
+  consolidateBilling: z.boolean().optional().default(false),
+  vehiclePlate: z.string().optional(),
+  vehicleModel: z.string().optional(),
+  vehicleBrand: z.string().optional(),
+  vehicleYear: z.string().optional(),
+  vehicleColor: z.string().optional(),
+  vehicleValue: z.number().optional(),
+});
+
+type ImportRow = z.infer<typeof ImportRowSchema>;
+type ImportGroup = {
+  clientId?: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  cpf?: string;
+  billingType: 'manual' | 'automatic';
+  consolidateBilling: boolean;
+  vehicles: { plate: string; model: string; brand: string; year: string; color: string; value: number }[];
+};
+
+export async function importClients(
+  companyId: string,
+  actorRole: UserRole,
+  aclProfileId: string | null | undefined,
+  rows: unknown[]
+): Promise<{ created: number; updated: number; errors: string[] }> {
+  const canCreate = await checkPermission(companyId, actorRole, aclProfileId, 'clients', 'create');
+  const canUpdate = await checkPermission(companyId, actorRole, aclProfileId, 'clients', 'update');
+
+  if (!canCreate && !canUpdate) {
+    throw new Error('Permissão insuficiente para importar clientes.');
+  }
+
+  const errors: string[] = [];
+  const groups = new Map<string, ImportGroup>();
+
+  for (const rawRow of rows) {
+    let row: ImportRow;
+    try {
+      row = ImportRowSchema.parse(rawRow);
+    } catch {
+      errors.push('Linha inválida: campos obrigatórios ausentes ou mal formatados.');
+      continue;
+    }
+
+    if (row.cpf && !isValidCpfOrCnpj(row.cpf)) {
+      errors.push(`${row.name}: CPF/CNPJ inválido (${row.cpf}).`);
+      continue;
+    }
+
+    if (row.vehiclePlate && !isValidPlate(row.vehiclePlate)) {
+      errors.push(`${row.name}: placa inválida (${row.vehiclePlate}).`);
+      continue;
+    }
+
+    const key = row.clientId || row.cpf || `${row.name.trim().toLowerCase()}|${row.email ?? ''}|${row.phone ?? ''}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        clientId: row.clientId,
+        name: row.name,
+        email: row.email,
+        phone: row.phone,
+        cpf: row.cpf,
+        billingType: row.billingType,
+        consolidateBilling: row.consolidateBilling,
+        vehicles: [],
+      };
+      groups.set(key, group);
+    }
+
+    if (row.vehiclePlate) {
+      group.vehicles.push({
+        plate: row.vehiclePlate,
+        model: row.vehicleModel ?? '',
+        brand: row.vehicleBrand ?? '',
+        year: row.vehicleYear ?? '',
+        color: row.vehicleColor ?? '',
+        value: row.vehicleValue ?? 0,
+      });
+    }
+  }
+
+  let created = 0;
+  let updated = 0;
+
+  for (const group of groups.values()) {
+    try {
+      let clientRef;
+
+      if (group.clientId) {
+        if (!canUpdate) {
+          errors.push(`${group.name}: sem permissão para atualizar clientes.`);
+          continue;
+        }
+        clientRef = doc(db, 'clients', group.clientId);
+        const clientSnap = await getDoc(clientRef);
+        if (!clientSnap.exists() || clientSnap.data().companyId !== companyId) {
+          errors.push(`${group.name}: cliente informado (${group.clientId}) não encontrado.`);
+          continue;
+        }
+        await updateDoc(clientRef, {
+          name: group.name,
+          email: group.email ?? null,
+          phone: group.phone ?? null,
+          cpf: group.cpf ?? null,
+          billingType: group.billingType,
+          consolidateBilling: group.consolidateBilling,
+        });
+        updated++;
+      } else {
+        if (!canCreate) {
+          errors.push(`${group.name}: sem permissão para criar clientes.`);
+          continue;
+        }
+        clientRef = await addDoc(collection(db, 'clients'), {
+          companyId,
+          name: group.name,
+          email: group.email ?? null,
+          phone: group.phone ?? null,
+          cpf: group.cpf ?? null,
+          billingType: group.billingType,
+          consolidateBilling: group.consolidateBilling,
+          address: 'Endereço mockado',
+          vehicles: [],
+        });
+        created++;
+      }
+
+      if (group.vehicles.length > 0) {
+        const vehiclesCol = collection(clientRef, 'vehicles');
+        const existingByPlate = new Map<string, string>();
+
+        if (group.clientId) {
+          const existingSnap = await getDocs(vehiclesCol);
+          existingSnap.docs.forEach((vehicleDoc) => {
+            const plate = vehicleDoc.data().plate;
+            if (plate) existingByPlate.set(String(plate).toUpperCase(), vehicleDoc.id);
+          });
+        }
+
+        const batch = writeBatch(db);
+        for (const vehicle of group.vehicles) {
+          const existingId = existingByPlate.get(vehicle.plate.toUpperCase());
+          const vehicleRef = existingId ? doc(vehiclesCol, existingId) : doc(vehiclesCol);
+          batch.set(vehicleRef, vehicle, { merge: true });
+        }
+        await batch.commit();
+      }
+    } catch (error) {
+      console.error('Error importing client:', error);
+      errors.push(`${group.name}: erro inesperado ao salvar.`);
+    }
+  }
+
+  revalidatePath('/clients');
+
+  return { created, updated, errors };
 }

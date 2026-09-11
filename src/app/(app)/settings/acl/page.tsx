@@ -28,6 +28,7 @@ import { CreateProfileModal } from '@/components/acl/create-profile-modal';
 import { ProfilePermissionEditor } from '@/components/acl/profile-permission-editor';
 import { MembersTable } from '@/components/acl/members-table';
 import { InviteMemberModal } from '@/components/acl/invite-member-modal';
+import { RenameProfileModal } from '@/components/acl/rename-profile-modal';
 import { fetchAclProfiles, fetchCompanyMembers } from '@/lib/data';
 import { deleteAclProfile } from '@/lib/actions';
 import { useAuth } from '@/hooks/use-auth';
@@ -38,12 +39,15 @@ export default function AclPage() {
   const [profiles, setProfiles] = useState<AclProfile[]>([]);
   const [members, setMembers] = useState<CompanyMember[]>([]);
   const [selectedProfile, setSelectedProfile] = useState<AclProfile | null>(null);
+  const [renamingProfile, setRenamingProfile] = useState<AclProfile | null>(null);
   const [loadingProfiles, setLoadingProfiles] = useState(true);
   const [loadingMembers, setLoadingMembers] = useState(true);
 
   const canReadAcl = hasPermission('acl', 'read');
   const canManageAcl = hasPermission('acl', 'create') || hasPermission('acl', 'update');
   const canManageUsers = hasPermission('users', 'create');
+  const canEditMembers = hasPermission('users', 'update');
+  const canRemoveMembers = hasPermission('users', 'delete');
 
   const loadProfiles = useCallback(async () => {
     if (!activeCompanyId) return;
@@ -174,6 +178,19 @@ export default function AclPage() {
                               <Badge variant="outline" className="text-xs">Sistema</Badge>
                             )}
                             {canManageAcl && !profile.isSystem && activeCompanyId && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setRenamingProfile(profile);
+                                }}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {canManageAcl && !profile.isSystem && activeCompanyId && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button
@@ -262,7 +279,9 @@ export default function AclPage() {
                   profiles={profiles}
                   companyId={activeCompanyId}
                   currentUserId={user.uid}
-                  canManage={canManageAcl}
+                  canAssignProfile={canManageAcl}
+                  canEdit={canEditMembers}
+                  canRemove={canRemoveMembers}
                   onRefresh={async () => { await loadMembers(); await loadProfiles(); }}
                 />
               ) : null}
@@ -270,6 +289,16 @@ export default function AclPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {renamingProfile && activeCompanyId && (
+        <RenameProfileModal
+          profile={renamingProfile}
+          companyId={activeCompanyId}
+          open={!!renamingProfile}
+          onOpenChange={(open) => { if (!open) setRenamingProfile(null); }}
+          onSuccess={loadProfiles}
+        />
+      )}
     </>
   );
 }

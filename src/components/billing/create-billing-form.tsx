@@ -42,16 +42,28 @@ export function CreateBillingForm({
   onSuccess: () => Promise<void> | void;
 }) {
   const { activeRole, activeAclProfile } = useAuth();
+  const consolidateBilling = client.consolidateBilling === true;
+  const hasVehicles = client.vehicles?.length > 0;
   const nextMonth = new Date();
   nextMonth.setMonth(nextMonth.getMonth() + 1);
   nextMonth.setDate(10);
 
+  const totalVehiclesValue = (client.vehicles ?? []).reduce(
+    (sum: number, vehicle: any) => sum + Number(vehicle.value ?? 0),
+    0
+  );
+
   const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(
+      formSchema.refine((values) => consolidateBilling || !hasVehicles || !!values.vehicleId, {
+        message: 'Selecione o veículo desta cobrança.',
+        path: ['vehicleId'],
+      })
+    ),
     defaultValues: {
       vehicleId: undefined,
       dueDate: formatDateForInput(nextMonth),
-      value: 0,
+      value: consolidateBilling ? totalVehiclesValue : 0,
       status: 'Em aberto',
     },
   });
@@ -69,7 +81,12 @@ export function CreateBillingForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-        {client.vehicles?.length > 0 && (
+        {consolidateBilling && (
+          <p className="text-sm text-muted-foreground">
+            Este cliente tem cobrança consolidada: o valor abaixo já soma todos os veículos.
+          </p>
+        )}
+        {!consolidateBilling && hasVehicles && (
           <FormField
             control={form.control}
             name="vehicleId"

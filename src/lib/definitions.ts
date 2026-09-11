@@ -44,9 +44,11 @@ export type CompanyMembership = {
   id: string;
   userId: string;
   companyId: string;
+  email?: string;
   role: UserRole;
   status: 'active' | 'invited' | 'disabled';
   aclProfileId?: string;
+  invitedAt?: Date;
 };
 
 export type CompanyMember = {
@@ -58,6 +60,7 @@ export type CompanyMember = {
   status: 'active' | 'invited' | 'disabled';
   aclProfileId?: string;
   aclProfileName?: string;
+  invitedAt?: Date;
 };
 
 export type UserProfile = {
@@ -74,6 +77,7 @@ export type Client = {
   address: string;
   cpf: string;
   billingType: 'manual' | 'automatic';
+  consolidateBilling: boolean;
   vehicles: Vehicle[];
   documents: UploadedFile[];
 };
@@ -97,5 +101,7 @@ export type FinancialRecord = {
   description: string;
   amount: number;
   clientId: string;
+  vehicleId?: string;
+  vehiclePlate?: string;
   status?: 'Em aberto' | 'Vencido' | 'Pago' | 'Cancelado' | 'Sem status';
 };
