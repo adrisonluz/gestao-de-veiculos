@@ -18,6 +18,7 @@ export const SYSTEM_AREAS: Record<SystemArea, AreaConfig> = {
   users: { label: 'Usuários', actions: ['read', 'create', 'update', 'delete'] },
   acl: { label: 'Controle de Acesso', actions: ['read', 'create', 'update', 'delete'] },
   settings: { label: 'Configurações', actions: ['read', 'update'] },
+  integrations: { label: 'Integrações', actions: ['read', 'create', 'update', 'delete'] },
 };
 
 export function can(role: UserRole | null | undefined, resource: Resource, action: Action): boolean {

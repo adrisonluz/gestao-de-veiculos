@@ -107,6 +107,12 @@ export function isValidCpfOrCnpj(value: string): boolean {
   return false;
 }
 
+export function applyCepMask(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 5) return digits;
+  return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+}
+
 const PLATE_REGEX = /^[A-Z]{3}-?\d{4}$|^[A-Z]{3}\d[A-Z]\d{2}$/;
 
 export function isValidPlate(value: string): boolean {

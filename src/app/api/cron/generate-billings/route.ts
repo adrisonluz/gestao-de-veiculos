@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { Firestore } from 'firebase-admin/firestore';
 import { AdminTimestamp, getAdminDb } from '@/lib/firebase-admin';
+import { decryptCoraCredentials, createCoraInvoiceForRecord } from '@/lib/integrations/cora-service';
+import type { Client } from '@/lib/definitions';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +12,33 @@ function getMonthKey(date: Date): string {
 
 function getDueDate(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 10);
+}
+
+async function triggerCoraChargeIfConfigured(
+  adminDb: Firestore,
+  companyId: string,
+  financialRecordId: string,
+  client: Pick<Client, 'name' | 'email' | 'cpf' | 'address'>,
+  description: string,
+  amount: number,
+  dueDate: Date
+): Promise<void> {
+  const integrationSnap = await adminDb.collection('payment_integrations').doc(`${companyId}_cora`).get();
+
+  if (!integrationSnap.exists || integrationSnap.data()?.enabled !== true) {
+    return;
+  }
+
+  const recordRef = adminDb.collection('financialRecords').doc(financialRecordId);
+
+  try {
+    const credentials = decryptCoraCredentials(integrationSnap.data());
+    const result = await createCoraInvoiceForRecord(credentials, client, financialRecordId, description, amount, dueDate);
+    await recordRef.update(result);
+  } catch (error) {
+    console.error('Error creating Cora invoice for financial record:', financialRecordId, error);
+    await recordRef.update({ externalProvider: 'cora', externalStatus: 'ERRO' });
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -54,7 +84,8 @@ export async function GET(request: NextRequest) {
               (sum, vehicleDoc) => sum + Number(vehicleDoc.data().value ?? 0),
               0
             );
-            const recordRef = db.collection('financialRecords').doc(`${clientDoc.id}_${monthKey}`);
+            const recordId = `${clientDoc.id}_${monthKey}`;
+            const recordRef = db.collection('financialRecords').doc(recordId);
             const existing = await recordRef.get();
 
             if (existing.exists) {
@@ -62,24 +93,34 @@ export async function GET(request: NextRequest) {
               continue;
             }
 
+            const description = `Cobrança consolidada automática (${monthKey})`;
             await recordRef.set({
               companyId,
               clientId: clientDoc.id,
               vehicleId: null,
               vehiclePlate: null,
               date: AdminTimestamp.fromDate(dueDate),
-              description: `Cobrança consolidada automática (${monthKey})`,
+              description,
               amount: totalValue,
               status: 'Em aberto',
               createdAt: AdminTimestamp.now(),
             });
             created++;
+
+            await triggerCoraChargeIfConfigured(
+              db,
+              companyId,
+              recordId,
+              { name: clientData.name, email: clientData.email, cpf: clientData.cpf, address: clientData.address },
+              description,
+              totalValue,
+              dueDate
+            );
           } else {
             for (const vehicleDoc of vehiclesSnap.docs) {
               const vehicleData = vehicleDoc.data();
-              const recordRef = db
-                .collection('financialRecords')
-                .doc(`${clientDoc.id}_${vehicleDoc.id}_${monthKey}`);
+              const recordId = `${clientDoc.id}_${vehicleDoc.id}_${monthKey}`;
+              const recordRef = db.collection('financialRecords').doc(recordId);
               const existing = await recordRef.get();
 
               if (existing.exists) {
@@ -87,18 +128,30 @@ export async function GET(request: NextRequest) {
                 continue;
               }
 
+              const vehicleAmount = Number(vehicleData.value ?? 0);
+              const description = `Cobrança automática (${monthKey}) — ${vehicleData.plate ?? ''}`;
               await recordRef.set({
                 companyId,
                 clientId: clientDoc.id,
                 vehicleId: vehicleDoc.id,
                 vehiclePlate: vehicleData.plate ?? null,
                 date: AdminTimestamp.fromDate(dueDate),
-                description: `Cobrança automática (${monthKey}) — ${vehicleData.plate ?? ''}`,
-                amount: Number(vehicleData.value ?? 0),
+                description,
+                amount: vehicleAmount,
                 status: 'Em aberto',
                 createdAt: AdminTimestamp.now(),
               });
               created++;
+
+              await triggerCoraChargeIfConfigured(
+                db,
+                companyId,
+                recordId,
+                { name: clientData.name, email: clientData.email, cpf: clientData.cpf, address: clientData.address },
+                description,
+                vehicleAmount,
+                dueDate
+              );
             }
           }
         } catch (error) {

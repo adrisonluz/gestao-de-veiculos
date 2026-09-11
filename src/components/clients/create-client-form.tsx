@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { createClient } from '@/lib/actions';
-import { applyCpfCnpjMask, applyPhoneMask, isValidCpfOrCnpj, normalizeEmail } from '@/lib/input-masks';
+import { applyCepMask, applyCpfCnpjMask, applyPhoneMask, isValidCpfOrCnpj, normalizeEmail } from '@/lib/input-masks';
 import { useAuth } from '@/hooks/use-auth';
 
 const formSchema = z.object({
@@ -36,6 +36,15 @@ const formSchema = z.object({
     .refine((value) => !value || isValidCpfOrCnpj(value), 'CPF/CNPJ inválido.'),
   billingType: z.enum(['manual', 'automatic']).default('manual'),
   consolidateBilling: z.boolean().default(false),
+  address: z.object({
+    zipCode: z.string().min(8, 'CEP inválido.'),
+    street: z.string().min(1, 'Informe a rua.'),
+    number: z.string().min(1, 'Informe o número.'),
+    district: z.string().min(1, 'Informe o bairro.'),
+    city: z.string().min(1, 'Informe a cidade.'),
+    state: z.string().length(2, 'Use a sigla do estado (ex: SP).'),
+    complement: z.string().optional(),
+  }),
 });
 
 export function CreateClientForm({
@@ -56,6 +65,7 @@ export function CreateClientForm({
       cpf: '',
       billingType: 'manual',
       consolidateBilling: false,
+      address: { zipCode: '', street: '', number: '', district: '', city: '', state: '', complement: '' },
     },
   });
 
@@ -139,6 +149,111 @@ export function CreateClientForm({
                   {...field}
                   onChange={(event) => field.onChange(applyCpfCnpjMask(event.target.value))}
                 />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="address.zipCode"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>CEP</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="00000-000"
+                    maxLength={9}
+                    {...field}
+                    onChange={(event) => field.onChange(applyCepMask(event.target.value))}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="address.state"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Estado (UF)</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="SP"
+                    maxLength={2}
+                    {...field}
+                    onChange={(event) => field.onChange(event.target.value.toUpperCase())}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+        <FormField
+          control={form.control}
+          name="address.city"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Cidade</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="address.district"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Bairro</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <div className="grid grid-cols-3 gap-4">
+          <FormField
+            control={form.control}
+            name="address.street"
+            render={({ field }) => (
+              <FormItem className="col-span-2">
+                <FormLabel>Rua</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="address.number"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Número</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+        <FormField
+          control={form.control}
+          name="address.complement"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Complemento (opcional)</FormLabel>
+              <FormControl>
+                <Input {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>

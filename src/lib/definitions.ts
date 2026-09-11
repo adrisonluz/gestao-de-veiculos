@@ -16,7 +16,8 @@ export type SystemArea =
   | 'reports'
   | 'users'
   | 'acl'
-  | 'settings';
+  | 'settings'
+  | 'integrations';
 
 export type SystemAction = 'read' | 'create' | 'update' | 'delete' | 'export';
 
@@ -68,13 +69,23 @@ export type UserProfile = {
   activeCompanyId: string;
 };
 
+export type ClientAddress = {
+  zipCode: string;
+  street: string;
+  number: string;
+  district: string;
+  city: string;
+  state: string;
+  complement?: string;
+};
+
 export type Client = {
   id: string;
   companyId: string;
   name: string;
   email?: string;
   phone?: string;
-  address: string;
+  address: ClientAddress;
   cpf: string;
   billingType: 'manual' | 'automatic';
   consolidateBilling: boolean;
@@ -104,4 +115,25 @@ export type FinancialRecord = {
   vehicleId?: string;
   vehiclePlate?: string;
   status?: 'Em aberto' | 'Vencido' | 'Pago' | 'Cancelado' | 'Sem status';
+  externalProvider?: PaymentProvider;
+  externalInvoiceId?: string;
+  externalStatus?: string;
+  paymentLinkUrl?: string;
+  pixCopyPaste?: string;
+};
+
+export type PaymentProvider = 'cora';
+
+export type PaymentIntegration = {
+  id: string;
+  companyId: string;
+  provider: PaymentProvider;
+  environment: 'sandbox' | 'production';
+  enabled: boolean;
+  webhookEndpointId?: string;
+  lastValidatedAt?: Date;
+  lastError?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string;
 };

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,6 +31,7 @@ import { fetchClients, getFinancialRecords } from '@/lib/data';
 import type { Client, FinancialRecord } from '@/lib/definitions';
 import { updateBillingStatus } from '@/lib/actions';
 import { useAuth } from '@/hooks/use-auth';
+import { useToast } from '@/hooks/use-toast';
 
 const STATUS_OPTIONS = ['Em aberto', 'Vencido', 'Pago', 'Cancelado'] as const;
 type BillingStatus = typeof STATUS_OPTIONS[number];
@@ -44,6 +45,7 @@ const statusBadgeVariant: Record<BillingStatus, string> = {
 
 export default function ReportsPage() {
   const { activeCompanyId, activeRole, activeAclProfile } = useAuth();
+  const { toast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
   const [financialRecords, setFinancialRecords] = useState<FinancialRecord[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<FinancialRecord[]>([]);
@@ -55,7 +57,7 @@ export default function ReportsPage() {
   const [selectedStatus, setSelectedStatus] = useState('');
   const [vehiclePlate, setVehiclePlate] = useState('');
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (!activeCompanyId) {
       setClients([]);
       setFinancialRecords([]);
@@ -63,18 +65,18 @@ export default function ReportsPage() {
       return;
     }
 
-    const loadData = async () => {
-      const [loadedClients, loadedRecords] = await Promise.all([
-        fetchClients(activeCompanyId),
-        getFinancialRecords(activeCompanyId),
-      ]);
-      setClients(loadedClients);
-      setFinancialRecords(loadedRecords);
-      setFilteredRecords(loadedRecords);
-    };
-
-    void loadData();
+    const [loadedClients, loadedRecords] = await Promise.all([
+      fetchClients(activeCompanyId),
+      getFinancialRecords(activeCompanyId),
+    ]);
+    setClients(loadedClients);
+    setFinancialRecords(loadedRecords);
+    setFilteredRecords(loadedRecords);
   }, [activeCompanyId]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   function applyFilters() {
     let result = [...financialRecords];
@@ -126,8 +128,9 @@ export default function ReportsPage() {
         prev.map((r) => (r.id === recordId ? { ...r, status: newStatus } : r));
       setFinancialRecords(update);
       setFilteredRecords(update);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Não foi possível atualizar o status', description: err?.message });
+      await loadData();
     } finally {
       setUpdatingId(null);
     }

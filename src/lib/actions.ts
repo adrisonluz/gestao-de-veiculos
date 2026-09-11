@@ -20,10 +20,12 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { canWithProfile, type Resource, type Action } from './rbac';
-import type { AclProfile, PermissionSet, UserRole } from './definitions';
+import type { AclProfile, Client, PermissionSet, UserRole } from './definitions';
 import { isValidCpfOrCnpj, isValidPlate } from './input-masks';
+import { decryptCoraCredentials, createCoraInvoiceForRecord } from './integrations/cora-service';
+import { cancelCoraInvoice } from './integrations/cora-client';
 
-async function checkPermission(
+export async function checkPermission(
   companyId: string,
   actorRole: UserRole,
   aclProfileId: string | null | undefined,
@@ -49,6 +51,16 @@ async function checkPermission(
   return canWithProfile(profile, resource, action);
 }
 
+const AddressSchema = z.object({
+  zipCode: z.string(),
+  street: z.string(),
+  number: z.string(),
+  district: z.string(),
+  city: z.string(),
+  state: z.string(),
+  complement: z.string().optional(),
+});
+
 const FormSchema = z.object({
   name: z.string(),
   email: z.preprocess(
@@ -62,6 +74,7 @@ const FormSchema = z.object({
   billingType: z.enum(['manual', 'automatic']),
   cpf: z.string().optional(),
   consolidateBilling: z.boolean().optional().default(false),
+  address: AddressSchema,
 });
 
 const CreateClient = FormSchema;
@@ -94,7 +107,7 @@ export async function createClient(
     throw new Error('Permissão insuficiente para criar clientes.');
   }
 
-  const { name, email, phone, billingType, cpf, consolidateBilling } = CreateClient.parse(data);
+  const { name, email, phone, billingType, cpf, consolidateBilling, address } = CreateClient.parse(data);
 
   try {
     await addDoc(collection(db, 'clients'), {
@@ -105,7 +118,7 @@ export async function createClient(
       billingType,
       cpf: cpf ?? null,
       consolidateBilling,
-      address: 'Endereço mockado',
+      address,
       vehicles: [],
     });
     revalidatePath('/clients');
@@ -113,6 +126,29 @@ export async function createClient(
     console.error('Error creating client:', error);
     throw error;
   }
+}
+
+export async function updateClientAddress(
+  companyId: string,
+  actorRole: UserRole,
+  aclProfileId: string | null | undefined,
+  clientId: string,
+  address: z.infer<typeof AddressSchema>
+) {
+  if (!await checkPermission(companyId, actorRole, aclProfileId, 'clients', 'update')) {
+    throw new Error('Permissão insuficiente para editar clientes.');
+  }
+
+  const parsed = AddressSchema.parse(address);
+  const clientRef = doc(db, 'clients', clientId);
+  const clientSnap = await getDoc(clientRef);
+
+  if (!clientSnap.exists() || clientSnap.data().companyId !== companyId) {
+    throw new Error('Cliente não pertence à empresa ativa.');
+  }
+
+  await updateDoc(clientRef, { address: parsed });
+  revalidatePath(`/clients/${clientId}`);
 }
 
 export async function updateClientBillingSettings(
@@ -266,6 +302,68 @@ export async function deleteClient(
   }
 }
 
+async function getEnabledCoraCredentials(companyId: string) {
+  const integrationSnap = await getDoc(doc(db, 'payment_integrations', `${companyId}_cora`));
+  if (!integrationSnap.exists() || integrationSnap.data().enabled !== true) {
+    return null;
+  }
+  return decryptCoraCredentials(integrationSnap.data());
+}
+
+async function triggerCoraChargeIfConfigured(
+  companyId: string,
+  financialRecordId: string,
+  client: Pick<Client, 'name' | 'email' | 'cpf' | 'address'>,
+  description: string,
+  amount: number,
+  dueDate: Date
+): Promise<void> {
+  const credentials = await getEnabledCoraCredentials(companyId);
+  if (!credentials) return;
+
+  const recordRef = doc(db, 'financialRecords', financialRecordId);
+
+  try {
+    const result = await createCoraInvoiceForRecord(credentials, client, financialRecordId, description, amount, dueDate);
+    await updateDoc(recordRef, result);
+  } catch (error) {
+    console.error('Error creating Cora invoice for financial record:', financialRecordId, error);
+    await updateDoc(recordRef, {
+      externalProvider: 'cora',
+      externalStatus: 'ERRO',
+    });
+  }
+}
+
+type CancelCoraOutcome = 'cancelled' | 'already_paid' | 'error' | 'not_applicable';
+
+async function cancelCoraChargeForRecord(
+  companyId: string,
+  recordRef: ReturnType<typeof doc>,
+  recordData: any
+): Promise<CancelCoraOutcome> {
+  if (recordData.externalProvider !== 'cora' || !recordData.externalInvoiceId) {
+    return 'not_applicable';
+  }
+
+  const credentials = await getEnabledCoraCredentials(companyId);
+  if (!credentials) return 'not_applicable';
+
+  try {
+    const { alreadyPaid } = await cancelCoraInvoice(credentials, recordData.externalInvoiceId);
+    if (alreadyPaid) {
+      await updateDoc(recordRef, { status: 'Pago', externalStatus: 'PAID' });
+      return 'already_paid';
+    }
+    await updateDoc(recordRef, { externalStatus: 'CANCELLED' });
+    return 'cancelled';
+  } catch (error) {
+    console.error('Error cancelling Cora invoice:', recordData.externalInvoiceId, error);
+    await updateDoc(recordRef, { externalStatus: 'ERRO_CANCELAMENTO' });
+    return 'error';
+  }
+}
+
 export async function createBilling(
   companyId: string,
   actorRole: UserRole,
@@ -304,7 +402,7 @@ export async function createBilling(
         ? `Cobrança (${status}) — ${vehiclePlate}`
         : `Cobrança (${status})`;
 
-    await addDoc(collection(db, 'financialRecords'), {
+    const recordRef = await addDoc(collection(db, 'financialRecords'), {
       companyId,
       clientId,
       vehicleId: !consolidateBilling && vehicleId ? vehicleId : null,
@@ -315,6 +413,16 @@ export async function createBilling(
       status,
       createdAt: serverTimestamp(),
     });
+
+    const clientData = clientSnap.data();
+    await triggerCoraChargeIfConfigured(
+      companyId,
+      recordRef.id,
+      { name: clientData.name, email: clientData.email, cpf: clientData.cpf, address: clientData.address },
+      description,
+      value,
+      dueDateObject
+    );
 
     revalidatePath(`/clients/${clientId}`);
     revalidatePath('/reports');
@@ -343,10 +451,105 @@ export async function updateBillingStatus(
     throw new Error('Cobrança não encontrada ou não pertence à empresa ativa.');
   }
 
+  if (status === 'Cancelado') {
+    const outcome = await cancelCoraChargeForRecord(companyId, recordRef, recordSnap.data());
+
+    if (outcome === 'already_paid') {
+      revalidatePath('/reports');
+      revalidatePath('/dashboard');
+      throw new Error('Este boleto já havia sido pago pelo cliente — o status foi atualizado para "Pago" em vez de cancelado.');
+    }
+
+    await updateDoc(recordRef, { status });
+    revalidatePath('/reports');
+    revalidatePath('/dashboard');
+
+    if (outcome === 'error') {
+      throw new Error('Cobrança marcada como cancelada no Safetrack, mas houve falha ao cancelar no Cora — cancele manualmente por lá para evitar pagamento duplicado.');
+    }
+    return;
+  }
+
   await updateDoc(recordRef, { status });
 
   revalidatePath('/reports');
   revalidatePath('/dashboard');
+}
+
+export async function reissueBilling(
+  companyId: string,
+  actorRole: UserRole,
+  aclProfileId: string | null | undefined,
+  recordId: string,
+  newDueDate: string
+): Promise<{ newRecordId: string }> {
+  if (!await checkPermission(companyId, actorRole, aclProfileId, 'billing', 'create')) {
+    throw new Error('Permissão insuficiente para emitir nova via.');
+  }
+
+  const oldRecordRef = doc(db, 'financialRecords', recordId);
+  const oldRecordSnap = await getDoc(oldRecordRef);
+
+  if (!oldRecordSnap.exists() || oldRecordSnap.data().companyId !== companyId) {
+    throw new Error('Cobrança não encontrada ou não pertence à empresa ativa.');
+  }
+
+  const oldRecordData = oldRecordSnap.data();
+
+  if (oldRecordData.status === 'Pago') {
+    throw new Error('Esta cobrança já foi paga.');
+  }
+
+  const cancelOutcome = await cancelCoraChargeForRecord(companyId, oldRecordRef, oldRecordData);
+
+  if (cancelOutcome === 'already_paid') {
+    throw new Error('Este boleto já havia sido pago pelo cliente — não é possível emitir nova via.');
+  }
+
+  if (cancelOutcome === 'error') {
+    throw new Error(
+      'Não foi possível cancelar o boleto anterior no Cora. Cancele manualmente por lá antes de emitir uma nova via, para evitar cobrança duplicada.'
+    );
+  }
+
+  await updateDoc(oldRecordRef, { status: 'Cancelado' });
+
+  const clientRef = doc(db, 'clients', oldRecordData.clientId);
+  const clientSnap = await getDoc(clientRef);
+
+  if (!clientSnap.exists()) {
+    throw new Error('Cliente da cobrança original não encontrado.');
+  }
+
+  const clientData = clientSnap.data();
+  const dueDateObject = new Date(`${newDueDate}T00:00:00`);
+
+  const newRecordRef = await addDoc(collection(db, 'financialRecords'), {
+    companyId,
+    clientId: oldRecordData.clientId,
+    vehicleId: oldRecordData.vehicleId ?? null,
+    vehiclePlate: oldRecordData.vehiclePlate ?? null,
+    date: Timestamp.fromDate(dueDateObject),
+    description: oldRecordData.description,
+    amount: oldRecordData.amount,
+    status: 'Em aberto',
+    createdAt: serverTimestamp(),
+  });
+
+  await triggerCoraChargeIfConfigured(
+    companyId,
+    newRecordRef.id,
+    { name: clientData.name, email: clientData.email, cpf: clientData.cpf, address: clientData.address },
+    oldRecordData.description,
+    oldRecordData.amount,
+    dueDateObject
+  );
+
+  revalidatePath(`/clients/${oldRecordData.clientId}`);
+  revalidatePath('/reports');
+  revalidatePath('/dashboard');
+
+  return { newRecordId: newRecordRef.id };
 }
 
 const AclProfileSchema = z.object({
@@ -874,7 +1077,7 @@ export async function importClients(
           cpf: group.cpf ?? null,
           billingType: group.billingType,
           consolidateBilling: group.consolidateBilling,
-          address: 'Endereço mockado',
+          address: { zipCode: '', street: '', number: '', district: '', city: '', state: '' },
           vehicles: [],
         });
         created++;

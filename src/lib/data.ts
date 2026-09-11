@@ -1,7 +1,24 @@
 
 import { db } from './firebase';
 import { collection, getDocs, doc, getDoc, query, where, orderBy } from 'firebase/firestore';
-import type { AclProfile, Client, CompanyMember, FinancialRecord, Vehicle } from './definitions';
+import type { AclProfile, Client, ClientAddress, CompanyMember, FinancialRecord, PaymentIntegration, Vehicle } from './definitions';
+
+function normalizeAddress(raw: any): ClientAddress {
+  if (raw && typeof raw === 'object') {
+    return {
+      zipCode: raw.zipCode ?? '',
+      street: raw.street ?? '',
+      number: raw.number ?? '',
+      district: raw.district ?? '',
+      city: raw.city ?? '',
+      state: raw.state ?? '',
+      complement: raw.complement ?? undefined,
+    };
+  }
+  // Clientes antigos gravaram o endereço como texto livre (placeholder); mantemos como rua
+  // para não perder o dado até o usuário editar com o endereço estruturado real.
+  return { zipCode: '', street: typeof raw === 'string' ? raw : '', number: '', district: '', city: '', state: '' };
+}
 
 function mapLegacyVehicle(vehicle: any, fallbackId: string): Vehicle {
   return {
@@ -46,7 +63,7 @@ export async function fetchClients(companyId: string): Promise<Client[]> {
       name: clientData.name,
       email: clientData.email,
       phone: clientData.phone,
-      address: clientData.address,
+      address: normalizeAddress(clientData.address),
       cpf: clientData.cpf,
       billingType: clientData.billingType,
       consolidateBilling: clientData.consolidateBilling === true,
@@ -77,7 +94,7 @@ export async function fetchClientById(companyId: string, id: string): Promise<Cl
         name: data.name,
         email: data.email,
         phone: data.phone,
-        address: data.address,
+        address: normalizeAddress(data.address),
         cpf: data.cpf,
         billingType: data.billingType,
         consolidateBilling: data.consolidateBilling === true,
@@ -105,6 +122,11 @@ export async function getFinancialRecords(companyId: string): Promise<FinancialR
       vehicleId: data.vehicleId ?? undefined,
       vehiclePlate: data.vehiclePlate ?? undefined,
       status: data.status || 'Sem status',
+      externalProvider: data.externalProvider ?? undefined,
+      externalInvoiceId: data.externalInvoiceId ?? undefined,
+      externalStatus: data.externalStatus ?? undefined,
+      paymentLinkUrl: data.paymentLinkUrl ?? undefined,
+      pixCopyPaste: data.pixCopyPaste ?? undefined,
     } as FinancialRecord;
   });
   return recordList;
@@ -149,6 +171,27 @@ export async function fetchAclProfileById(companyId: string, profileId: string):
     createdAt: data.createdAt?.toDate() ?? new Date(),
     createdBy: data.createdBy ?? '',
   } as AclProfile;
+}
+
+export async function fetchCoraIntegration(companyId: string): Promise<PaymentIntegration | null> {
+  const integrationRef = doc(db, 'payment_integrations', `${companyId}_cora`);
+  const snap = await getDoc(integrationRef);
+  if (!snap.exists()) return null;
+
+  const data = snap.data();
+  return {
+    id: snap.id,
+    companyId: data.companyId,
+    provider: 'cora',
+    environment: data.environment,
+    enabled: data.enabled === true,
+    webhookEndpointId: data.webhookEndpointId ?? undefined,
+    lastValidatedAt: data.lastValidatedAt?.toDate(),
+    lastError: data.lastError ?? undefined,
+    createdAt: data.createdAt?.toDate() ?? new Date(),
+    updatedAt: data.updatedAt?.toDate() ?? new Date(),
+    createdBy: data.createdBy ?? '',
+  };
 }
 
 export async function fetchCompanyMembers(companyId: string): Promise<CompanyMember[]> {

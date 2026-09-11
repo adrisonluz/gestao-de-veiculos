@@ -16,6 +16,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import {
@@ -28,9 +29,13 @@ import {
 import { CreateVehicleModal } from '@/components/vehicles/create-vehicle-modal';
 import { VehicleList } from '@/components/vehicles/vehicle-list';
 import { CreateBillingModal } from '@/components/billing/create-billing-modal';
+import { ReissueBillingModal } from '@/components/billing/reissue-billing-modal';
 import { FileUploadSection } from '@/components/file-upload/file-upload-section';
+import { EditAddressModal } from '@/components/clients/edit-address-modal';
+import { Pencil } from 'lucide-react';
 import type { Client, FinancialRecord, UploadedFile } from '@/lib/definitions';
 import { useAuth } from '@/hooks/use-auth';
+import { useToast } from '@/hooks/use-toast';
 import {
   Table,
   TableBody,
@@ -53,11 +58,13 @@ const statusBadgeVariant: Record<BillingStatus, string> = {
 export default function ClientDetailPage() {
   const params = useParams<{ id: string }>();
   const { activeCompanyId, activeRole, activeAclProfile, hasPermission } = useAuth();
+  const { toast } = useToast();
   const [client, setClient] = useState<Client | null>(null);
   const [billingRecords, setBillingRecords] = useState<FinancialRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingBillingId, setUpdatingBillingId] = useState<string | null>(null);
   const [savingConsolidation, setSavingConsolidation] = useState(false);
+  const [editingAddress, setEditingAddress] = useState(false);
 
   const loadClient = useCallback(async () => {
     if (!activeCompanyId || !params?.id) {
@@ -93,8 +100,9 @@ export default function ClientDetailPage() {
       setBillingRecords((prev) =>
         prev.map((r) => (r.id === recordId ? { ...r, status: newStatus } : r))
       );
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Não foi possível atualizar o status', description: err?.message });
+      await loadClient();
     } finally {
       setUpdatingBillingId(null);
     }
@@ -158,8 +166,23 @@ export default function ClientDetailPage() {
                 </div>
               )}
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Endereço</p>
-                <p>{client.address}</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-muted-foreground">Endereço</p>
+                  {hasPermission('clients', 'update') && (
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingAddress(true)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+                {client.address?.street ? (
+                  <p>
+                    {client.address.street}, {client.address.number}
+                    {client.address.complement ? ` - ${client.address.complement}` : ''} — {client.address.district},{' '}
+                    {client.address.city}/{client.address.state} — {client.address.zipCode}
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Endereço não cadastrado.</p>
+                )}
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Cobrança</p>
@@ -199,6 +222,17 @@ export default function ClientDetailPage() {
               />
             </CardContent>
           </Card>
+
+          {editingAddress && (
+            <EditAddressModal
+              companyId={activeCompanyId}
+              clientId={client.id}
+              address={client.address}
+              open={editingAddress}
+              onOpenChange={setEditingAddress}
+              onSuccess={(address) => setClient((prev) => (prev ? { ...prev, address } : prev))}
+            />
+          )}
         </div>
 
         <div className="space-y-6 lg:col-span-2">
@@ -252,6 +286,10 @@ export default function ClientDetailPage() {
                       <TableHead>Descrição</TableHead>
                       <TableHead className="text-right">Valor</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Cora</TableHead>
+                      <TableHead>
+                        <span className="sr-only">Ações</span>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -287,6 +325,42 @@ export default function ClientDetailPage() {
                               ))}
                             </SelectContent>
                           </Select>
+                        </TableCell>
+                        <TableCell>
+                          {record.externalProvider === 'cora' ? (
+                            record.externalStatus === 'ERRO' ? (
+                              <span className="text-xs text-destructive">Erro ao gerar</span>
+                            ) : (
+                              <div className="flex flex-col gap-1 text-xs">
+                                {record.paymentLinkUrl && (
+                                  <a
+                                    href={record.paymentLinkUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-primary hover:underline"
+                                  >
+                                    Boleto
+                                  </a>
+                                )}
+                                {record.pixCopyPaste && (
+                                  <button
+                                    type="button"
+                                    className="text-left text-primary hover:underline"
+                                    onClick={() => navigator.clipboard.writeText(record.pixCopyPaste!)}
+                                  >
+                                    Copiar Pix
+                                  </button>
+                                )}
+                              </div>
+                            )
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {record.status !== 'Pago' && hasPermission('billing', 'create') && (
+                            <ReissueBillingModal companyId={activeCompanyId} record={record} onSuccess={loadClient} />
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}

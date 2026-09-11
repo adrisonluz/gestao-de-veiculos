@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   PanelLeft,
   PieChart,
+  Plug,
   ShieldCheck,
   Users,
 } from 'lucide-react';
@@ -25,16 +26,24 @@ import {
 } from '@/components/ui/tooltip';
 import { UserNav } from '@/components/user-nav';
 import { Logo } from '@/components/logo';
+import { useAuth } from '@/hooks/use-auth';
 
-const navItems = [
+const baseNavItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Painel' },
   { href: '/clients', icon: Users, label: 'Clientes' },
   { href: '/reports', icon: PieChart, label: 'Relatórios' },
   { href: '/settings/acl', icon: ShieldCheck, label: 'Controle de Acesso' },
 ];
 
+const integrationsNavItem = { href: '/settings/integrations', icon: Plug, label: 'Integrações' };
+
 export function MainLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const { hasPermission } = useAuth();
+
+  const navItems = hasPermission('integrations', 'read')
+    ? [...baseNavItems, integrationsNavItem]
+    : baseNavItems;
 
   const renderNavItem = (item: typeof navItems[0]) => (
     <Tooltip key={item.href}>
